@@ -71,7 +71,7 @@ pub fn create_customer(customer_name: &str, main_branch: &str, remote: Option<&s
         }
     }
 
-    Echo::success(&format!(
+    Echo::success(format!(
         "customer branch '{}' created. Switch to it with: git switch {}",
         customer_branch, customer_branch
     ));
@@ -148,7 +148,7 @@ pub fn sync_customer(customer_name: &str, main_branch: &str, push: bool, remote:
         }
     }
 
-    Echo::success(&format!(
+    Echo::success(format!(
         "'{}' synced with '{}'",
         customer_branch, main_branch
     ));
@@ -246,13 +246,13 @@ pub fn sync_all_customers(
     println!("\n--- Sync Report ---\n");
     for (branch, success, msg) in &results {
         if *success {
-            Echo::success(&format!("  {} — {}", branch, msg));
+            Echo::success(format!("  {} — {}", branch, msg));
         } else {
-            Echo::error(&format!("  {} — {}", branch, msg));
+            Echo::error(format!("  {} — {}", branch, msg));
         }
     }
     println!();
-    Echo::info(&format!(
+    Echo::info(format!(
         "Total: {} succeeded, {} failed",
         success_count, fail_count
     ));

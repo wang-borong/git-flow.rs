@@ -126,12 +126,12 @@ impl Git {
         let ancestor_commit = repo.find_commit(ancestor)?;
         let ancestor_tree = ancestor_commit.tree()?;
 
-        let mut merge_opts = git2::MergeOptions::new();
+        let merge_opts = git2::MergeOptions::new();
         let mut index = repo.merge_trees(
             &ancestor_tree,
             &head_tree,
             &source_tree,
-            Some(&mut merge_opts),
+            Some(&merge_opts),
         )?;
 
         if index.has_conflicts() {
@@ -238,6 +238,7 @@ impl Git {
 }
 
 // # stash & conflict state
+#[allow(dead_code)]
 impl Git {
     /// Check if there are uncommitted changes in the working directory.
     pub fn has_uncommitted_changes(&self) -> Result<bool> {

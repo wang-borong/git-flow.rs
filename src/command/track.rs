@@ -32,12 +32,12 @@ pub fn track_task(branch_name: String, branch_type: BranchType) {
     };
 
     if commits.is_empty() {
-        Echo::info(&format!(
+        Echo::info(format!(
             "no commits ahead of the source branch {} on {}",
             &branch_type.from, &branch_name,
         ));
     } else {
-        Echo::info(&format!(
+        Echo::info(format!(
             "these commits are ahead of the source branch {}:\n",
             &branch_type.from,
         ));

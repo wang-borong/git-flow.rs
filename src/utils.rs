@@ -29,10 +29,7 @@ pub fn get_branch_type_name(
     /* branch_name */ String,
     /* branch_type */ BranchType,
 )> {
-    let config = match read_config(config_path) {
-        Err(err) => return Err(err),
-        Ok(config_v) => config_v,
-    };
+    let config = read_config(config_path)?;
 
     if let Some(branch_type_v) = branch_type {
         let target_branch_type = config.branch_types.iter().find(|x| x.name == branch_type_v);

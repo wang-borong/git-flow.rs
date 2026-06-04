@@ -23,7 +23,7 @@ fn get_global_config_path() -> Result<PathBuf> {
 fn get_local_config_path() -> Result<PathBuf> {
     let mut cur_dir = env::current_dir()?;
 
-    while !cur_dir.parent().is_none() {
+    while cur_dir.parent().is_some() {
         let git_dir = cur_dir.join(".git");
         if git_dir.exists() && git_dir.is_dir() {
             return Ok(cur_dir.join(".git-flow.toml"));

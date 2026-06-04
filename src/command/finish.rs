@@ -117,7 +117,7 @@ pub fn finish_task(branch_name: String, branch_type: BranchType, opts: FinishOpt
             Ok(_) => finish(true, &format!("delete branch {}", &branch_name)),
         }
     } else {
-        Echo::info(&format!("keeping branch {}", &branch_name));
+        Echo::info(format!("keeping branch {}", &branch_name));
     }
 
     // -- run after finish hook --
@@ -127,7 +127,7 @@ pub fn finish_task(branch_name: String, branch_type: BranchType, opts: FinishOpt
 fn resolve_target_branches(
     git: &Git,
     branch_name: &str,
-    target_branches: &Vec<TargetBranch>,
+    target_branches: &[TargetBranch],
     branch_type: &BranchType,
 ) -> Result<()> {
     // Infer main branch: for feature/hotfix types, the `from` field is typically "main"
@@ -225,8 +225,8 @@ fn cherry_pick(git: &Git, source_branch: &str, target_branch: &str) -> Result<()
         }
         Ok(commits_v) => commits_v,
     };
-    if commits.len() == 0 {
-        Echo::success(&format!("no commits to cherry pick to {}", target_branch));
+    if commits.is_empty() {
+        Echo::success(format!("no commits to cherry pick to {}", target_branch));
         return Ok(());
     }
     let msg = if commits.len() == 1 {

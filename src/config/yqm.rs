@@ -28,6 +28,7 @@ pub struct BranchesConfig {
 pub struct PrefixConfig {
     pub prefix: String,
     #[serde(default)]
+    #[allow(dead_code)]
     pub description: Option<String>,
 }
 
@@ -44,6 +45,7 @@ pub struct MergeConfig {
     #[serde(default = "default_merge")]
     pub release_strategy: String,
     #[serde(default = "default_merge")]
+    #[allow(dead_code)]
     pub customer_sync_strategy: String,
 }
 
@@ -69,6 +71,7 @@ fn default_merge() -> String {
 pub struct HooksConfig {
     pub post_start: Option<String>,
     pub post_finish: Option<String>,
+    #[allow(dead_code)]
     pub post_customer_sync: Option<String>,
     pub post_tag: Option<String>,
 }
@@ -99,7 +102,7 @@ pub fn parse_yqm_config(toml_content: &str) -> Result<Config> {
     if !is_disabled("feature") {
         branch_types.push(BranchType {
             name: "feature".to_string(),
-            create: format!("feature/{{NAME}}"),
+            create: "feature/{{NAME}}".to_string(),
             from: main.clone(),
             to: vec![TargetBranch {
                 name: main.clone(),
@@ -125,7 +128,7 @@ pub fn parse_yqm_config(toml_content: &str) -> Result<Config> {
     // -- customer feature (from customer/x, squash→customer/x) --
     branch_types.push(BranchType {
         name: "customer-feature".to_string(),
-        create: format!("feature/customer-{{NAME}}/{{FEATURE}}"),
+        create: "feature/customer-{{NAME}}/{{FEATURE}}".to_string(),
         from: format!("{}{{NAME}}", customer_prefix),
         to: vec![TargetBranch {
             name: format!("{}{{NAME}}", customer_prefix),
@@ -151,7 +154,7 @@ pub fn parse_yqm_config(toml_content: &str) -> Result<Config> {
     if !is_disabled("hotfix") {
         branch_types.push(BranchType {
             name: "hotfix".to_string(),
-            create: format!("hotfix/{{NAME}}"),
+            create: "hotfix/{{NAME}}".to_string(),
             from: main.clone(),
             to: vec![TargetBranch {
                 name: main.clone(),
@@ -177,7 +180,7 @@ pub fn parse_yqm_config(toml_content: &str) -> Result<Config> {
     // -- customer hotfix (from customer/x, squash→customer/x) --
     branch_types.push(BranchType {
         name: "customer-hotfix".to_string(),
-        create: format!("hotfix/customer-{{NAME}}/{{FIX}}"),
+        create: "hotfix/customer-{{NAME}}/{{FIX}}".to_string(),
         from: format!("{}{{NAME}}", customer_prefix),
         to: vec![TargetBranch {
             name: format!("{}{{NAME}}", customer_prefix),
@@ -203,7 +206,7 @@ pub fn parse_yqm_config(toml_content: &str) -> Result<Config> {
     if !is_disabled("generalize") {
         branch_types.push(BranchType {
             name: "generalize".to_string(),
-            create: format!("generalize/{{NAME}}"),
+            create: "feature/{NAME}".to_string(),
             from: format!("{}{{CUSTOMER}}", customer_prefix),
             to: vec![TargetBranch {
                 name: main.clone(),

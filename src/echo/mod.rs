@@ -8,6 +8,8 @@ use tokio::{
 #[cfg(test)]
 mod test;
 
+type ProgressFn = Box<dyn FnOnce(bool, &str)>;
+
 pub struct Echo {}
 
 impl Echo {
@@ -29,7 +31,7 @@ impl Echo {
         println!("\x1B[32m\u{2714} {}\x1B[0m", msg.into());
     }
 
-    pub fn progress<T: Into<String>>(msg: T) -> Box<dyn FnOnce(bool, &str)> {
+    pub fn progress<T: Into<String>>(msg: T) -> ProgressFn {
         let (tx, mut rx) = oneshot::channel();
 
         let msg = msg.into();

@@ -69,7 +69,7 @@ pub fn sync_repo_branches(target: SyncTarget, strategy: SyncStrategy) {
 fn select_repo(git: &Git) -> Result<String> {
     // -- fetch repos --
     let repos = git.get_remote_repos()?;
-    if repos.len() == 0 {
+    if repos.is_empty() {
         bail!("no remote repo specified");
     }
 
@@ -130,7 +130,7 @@ fn sync_branches(
             .filter(|x| !source_branches.iter().any(|y| x.as_str() == y))
             .map(|x| x.to_string())
             .collect::<Vec<String>>();
-        if redundant_branches.len() == 0 {
+        if redundant_branches.is_empty() {
             Echo::success("no redundant branches");
         } else {
             let finish = Echo::progress("remove redundant branches");
@@ -156,7 +156,7 @@ fn sync_branches(
         .filter(|x| !target_branches.iter().any(|y| x.as_str() == y))
         .map(|x| x.to_string())
         .collect::<Vec<String>>();
-    if missing_branches.len() == 0 {
+    if missing_branches.is_empty() {
         Echo::success("no missing branches");
         return;
     }

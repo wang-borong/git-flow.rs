@@ -7,21 +7,17 @@ use super::definition::{Config, BRANCH_NAME_PLACEHOLDER};
 mod test;
 
 pub fn validate_config(config: &Config) -> Result<()> {
-    no_duplicate_branch_type(&config)?;
-    target_is_valid_regex(&config)?;
-    create_is_valid(&config)?;
+    no_duplicate_branch_type(config)?;
+    target_is_valid_regex(config)?;
+    create_is_valid(config)?;
     Ok(())
 }
 
 fn no_duplicate_branch_type(config: &Config) -> Result<()> {
     let branch_types = &config.branch_types;
 
-    for i in 0..branch_types.len() {
-        let branch_type_i = &branch_types[i];
-
-        for j in 0..i {
-            let branch_type_j = &branch_types[j];
-
+    for (i, branch_type_i) in branch_types.iter().enumerate() {
+        for branch_type_j in &branch_types[..i] {
             if branch_type_i.name == branch_type_j.name {
                 bail!(
                     "invalid config: duplicate branch type name {}",
@@ -75,7 +71,7 @@ fn create_is_valid(config: &Config) -> Result<()> {
         .map(|x| format!("{}: {}", x.name, x.create))
         .collect::<Vec<String>>();
 
-    if invalid_creates.len() > 0 {
+    if !invalid_creates.is_empty() {
         bail!(
             "These branch_types have invalid 'create' which should include only one {}:\n{}",
             BRANCH_NAME_PLACEHOLDER,

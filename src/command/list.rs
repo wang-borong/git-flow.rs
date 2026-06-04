@@ -36,7 +36,7 @@ pub fn list_branch_types(config_path: Option<PathBuf>) {
             Echo::error(err.to_string());
         }
         Ok(config_v) => {
-            if config_v.branch_types.len() == 0 {
+            if config_v.branch_types.is_empty() {
                 Echo::warning("no branch types avaliable");
                 return;
             }
@@ -77,7 +77,6 @@ pub fn list_branch_types(config_path: Option<PathBuf>) {
                 Table::new(branch_types)
                     .with(Width::wrap(width).priority(PriorityMax::default()))
                     .with(Width::increase(width))
-                    .to_string()
             )
         }
     }

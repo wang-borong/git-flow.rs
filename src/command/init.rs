@@ -8,7 +8,7 @@ use crate::echo::Echo;
 pub fn init_config() {
     match interactive_init() {
         Err(err) => Echo::error(err.to_string()),
-        Ok(path) => Echo::success(&format!("config written to {}", path.display())),
+        Ok(path) => Echo::success(format!("config written to {}", path.display())),
     }
 }
 

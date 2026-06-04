@@ -79,7 +79,7 @@ pub fn validate_strategy(
 
     // Other branches merging to main should use squash
     if !matches!(strategy, Strategy::Squash) {
-        Echo::warning(&format!(
+        Echo::warning(format!(
             "branch '{}' merging to '{}' uses {:?} strategy instead of recommended 'squash'",
             branch_name, target_branch, strategy
         ));

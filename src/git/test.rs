@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn has_git_t() {
-    assert_eq!(Git::git_installed(), true);
+    assert!(Git::git_installed());
 }
 
 #[test]
@@ -15,65 +15,65 @@ fn open_repo_t() {
 fn switch_t() {
     let git = Git::open().unwrap();
     let result = git.switch("undefined");
-    assert_eq!(result.is_ok(), false);
+    assert!(result.is_err());
     let result = git.switch("main");
-    assert_eq!(result.is_ok(), true);
+    assert!(result.is_ok());
 }
 
 #[test]
 fn merge_t() {
     let git = Git::open().unwrap();
     let result = git.merge("undefined");
-    assert_eq!(result.is_ok(), false);
+    assert!(result.is_err());
 }
 
 #[test]
 fn rebase_t() {
     let git = Git::open().unwrap();
     let result = git.rebase("undefined");
-    assert_eq!(result.is_ok(), false);
+    assert!(result.is_err());
 }
 
 #[test]
 fn cherry_pick_t() {
     let git = Git::open().unwrap();
     let result = git.cherry_pick(vec!["undefined".to_string()]);
-    assert_eq!(result.is_ok(), false);
+    assert!(result.is_err());
 }
 
 #[test]
 fn del_local_branch_t() {
     let git = Git::open().unwrap();
     let result = git.del_local_branch("undefined");
-    assert_eq!(result.is_ok(), false);
+    assert!(result.is_err());
 }
 
 #[test]
 fn diff_commits_t() {
     let git = Git::open().unwrap();
     let result = git.diff_commits("main", "test");
-    assert_eq!(result.is_ok(), false)
+    assert!(result.is_err());
 }
 
 #[test]
 fn create_local_branch_t() {
     let git = Git::open().unwrap();
     let result = git.create_local_branch("main", "main");
-    assert_eq!(result.is_ok(), false)
+    assert!(result.is_err());
 }
 
 #[test]
 fn create_remote_branch_t() {
     let git = Git::open().unwrap();
     let result = git.create_remote_branch("test", "main", "main");
-    assert_eq!(result.is_ok(), false)
+    assert!(result.is_err());
 }
 
 #[test]
 fn get_local_branches_t() {
     let git = Git::open().unwrap();
     let result = git.get_local_branches().unwrap();
-    assert_eq!(result.iter().find(|x| x.as_str() == "main").is_some(), true);
+    assert!(result.iter().any(|x| x.as_str() == "main"));
 }
 
 #[test]
@@ -98,7 +98,7 @@ fn fetch_remote_branches_t() {
 fn get_remote_repos() {
     let git = Git::open().unwrap();
     let repos = git.get_remote_repos().unwrap();
-    assert_eq!(repos.iter().any(|x| x == "origin"), true);
+    assert!(repos.iter().any(|x| x == "origin"));
     assert_eq!(repos.len(), 1);
 }
 
@@ -106,5 +106,5 @@ fn get_remote_repos() {
 fn del_remote_branch_t() {
     let git = Git::open().unwrap();
     let result = git.del_remote_branch("test", "main");
-    assert_eq!(result.is_ok(), false)
+    assert!(result.is_err());
 }
