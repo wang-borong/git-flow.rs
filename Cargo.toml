@@ -11,7 +11,7 @@ categories = ["command-line-utilities"]
 description = "Extensible git flow written in rust for product developpment"
 
 [[bin]]
-name = "git-flow"
+name = "gitflow"
 path = "src/main.rs"
 
 [dependencies]

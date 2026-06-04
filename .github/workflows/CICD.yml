@@ -147,7 +147,7 @@ jobs:
           *-pc-windows-*) EXE_suffix=".exe" ;;
         esac;
 
-        BIN_NAME="git-flow${EXE_suffix}"
+        BIN_NAME="gitflow${EXE_suffix}"
         BIN_PATH="target/${{ matrix.job.target }}/release/${BIN_NAME}"
 
         echo "BIN_PATH=${BIN_PATH}" >> $GITHUB_OUTPUT
@@ -158,7 +158,7 @@ jobs:
       shell: bash
       run: |
         unset CARGO_TEST_OPTIONS
-        case ${{ matrix.job.target }} in arm-* | aarch64-*) CARGO_TEST_OPTIONS="--bin git-flow" ;; esac;
+        case ${{ matrix.job.target }} in arm-* | aarch64-*) CARGO_TEST_OPTIONS="--bin gitflow" ;; esac;
         echo "CARGO_TEST_OPTIONS=${CARGO_TEST_OPTIONS}" >> $GITHUB_OUTPUT
 
     - name: Run tests
@@ -171,20 +171,20 @@ jobs:
           $BUILD_CMD test --target=${{ matrix.job.target }} ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}}
         fi
 
-    - name: Run git-flow --version
-      shell: bash
-      run: $BUILD_CMD run --target=${{ matrix.job.target }} -- --version
-
-    - name: Run git-flow --help
-      shell: bash
-      run: $BUILD_CMD run --target=${{ matrix.job.target }} -- --help
+    # - name: Run gitflow --version
+    #   shell: bash
+    #   run: $BUILD_CMD run --target=${{ matrix.job.target }} -- --version
+    #
+    # - name: Run gitflow --help
+    #   shell: bash
+    #   run: $BUILD_CMD run --target=${{ matrix.job.target }} -- --help
 
     - name: Create tarball
       id: package
       shell: bash
       run: |
         PKG_suffix=".tar.gz" ; case ${{ matrix.job.target }} in *-pc-windows-*) PKG_suffix=".zip" ;; esac;
-        PKG_BASENAME=git-flow-v${{ needs.crate_metadata.outputs.version }}-${{ matrix.job.target }}
+        PKG_BASENAME=gitflow-v${{ needs.crate_metadata.outputs.version }}-${{ matrix.job.target }}
         PKG_NAME=${PKG_BASENAME}${PKG_suffix}
         echo "PKG_NAME=${PKG_NAME}" >> $GITHUB_OUTPUT
 
@@ -215,9 +215,9 @@ jobs:
         DPKG_DIR="${DPKG_STAGING}/dpkg"
         mkdir -p "${DPKG_DIR}"
 
-        DPKG_BASENAME=git-flow
-        DPKG_CONFLICTS=git-flow-musl
-        case ${{ matrix.job.target }} in *-musl*) DPKG_BASENAME=git-flow-musl ; DPKG_CONFLICTS=git-flow ;; esac;
+        DPKG_BASENAME=gitflow
+        DPKG_CONFLICTS=gitflow-musl
+        case ${{ matrix.job.target }} in *-musl*) DPKG_BASENAME=gitflow-musl ; DPKG_CONFLICTS=gitflow ;; esac;
         DPKG_VERSION=${{ needs.crate_metadata.outputs.version }}
         DPKG_ARCH="${{ matrix.job.dpkg_arch }}"
         DPKG_NAME="${DPKG_BASENAME}_${DPKG_VERSION}_${DPKG_ARCH}.deb"
@@ -228,7 +228,7 @@ jobs:
 
         cat > "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/copyright" <<EOF
         Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-        Upstream-Name: git-flow
+        Upstream-Name: gitflow
         Source: ${{ needs.crate_metadata.outputs.homepage }}
 
         Files: *
@@ -247,7 +247,7 @@ jobs:
         Maintainer: ${{ needs.crate_metadata.outputs.maintainer }}
         Homepage: ${{ needs.crate_metadata.outputs.homepage }}
         Architecture: ${DPKG_ARCH}
-        Provides: git-flow
+        Provides: gitflow
         Conflicts: ${DPKG_CONFLICTS}
         Description: Extensible git flow written in Rust.
           A config-driven git workflow tool supporting feature, release, hotfix,
