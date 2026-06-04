@@ -25,3 +25,6 @@ toml = "1.1"
 tabled = "0.21"
 terminal_size = "0.4"
 git2 = "0.21"
+
+[dev-dependencies]
+tempfile = "3"

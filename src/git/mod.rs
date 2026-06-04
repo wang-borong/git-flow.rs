@@ -21,6 +21,13 @@ impl Git {
             repo: RefCell::new(repo),
         })
     }
+
+    #[allow(dead_code)]
+    pub fn from_repo(repo: Repository) -> Self {
+        Self {
+            repo: RefCell::new(repo),
+        }
+    }
 }
 
 // # status
@@ -154,6 +161,8 @@ impl Git {
 impl Git {
     pub fn switch(&self, target_branch: &str) -> Result<()> {
         let repo = self.repo.borrow();
+        // Validate the branch exists before setting HEAD
+        repo.find_branch(target_branch, git2::BranchType::Local)?;
         let refname = format!("refs/heads/{}", target_branch);
         repo.set_head(&refname)?;
         repo.checkout_head(Some(CheckoutBuilder::new().safe()))?;

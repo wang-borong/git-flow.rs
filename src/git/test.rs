@@ -1,115 +1,179 @@
 use super::*;
+use git2::Repository;
+use tempfile::TempDir;
+
+/// Create a temporary git repo with an initial commit on `main`.
+fn test_repo() -> (TempDir, Git) {
+    let td = TempDir::new().unwrap();
+    let path = td.path();
+
+    // Use git CLI for reliable repo setup
+    std::process::Command::new("git")
+        .args(["init", "-b", "main"])
+        .current_dir(path)
+        .output()
+        .unwrap();
+    std::process::Command::new("git")
+        .args(["config", "user.name", "test"])
+        .current_dir(path)
+        .output()
+        .unwrap();
+    std::process::Command::new("git")
+        .args(["config", "user.email", "test@test.com"])
+        .current_dir(path)
+        .output()
+        .unwrap();
+    std::process::Command::new("git")
+        .args(["commit", "--allow-empty", "-m", "init"])
+        .current_dir(path)
+        .output()
+        .unwrap();
+
+    let repo = Repository::open(path).unwrap();
+    let git = Git::from_repo(repo);
+    (td, git)
+}
+
+// ---- basic ----
 
 #[test]
 fn has_git_t() {
+    let (_td, _git) = test_repo();
     assert!(Git::git_installed());
 }
 
 #[test]
 fn open_repo_t() {
-    let git = Git::open();
-    assert!(git.is_ok());
+    let (_td, git) = test_repo();
+    // Should have a valid current branch (main or master)
+    assert!(git.current_branch().is_ok());
 }
+
+// ---- switch ----
 
 #[test]
 fn switch_t() {
-    let git = Git::open().unwrap();
-    let current = git.current_branch().unwrap();
+    let (_td, git) = test_repo();
     let result = git.switch("undefined");
     assert!(result.is_err());
-    // Switch to current branch to verify switch works (avoids depending on "main" existing)
+
+    let current = git.current_branch().unwrap();
     let result = git.switch(&current);
     assert!(result.is_ok());
 }
 
+// ---- merge / rebase / cherry-pick ----
+
 #[test]
 fn merge_t() {
-    let git = Git::open().unwrap();
+    let (_td, git) = test_repo();
     let result = git.merge("undefined");
     assert!(result.is_err());
 }
 
 #[test]
 fn rebase_t() {
-    let git = Git::open().unwrap();
+    let (_td, git) = test_repo();
     let result = git.rebase("undefined");
     assert!(result.is_err());
 }
 
 #[test]
 fn cherry_pick_t() {
-    let git = Git::open().unwrap();
+    let (_td, git) = test_repo();
     let result = git.cherry_pick(vec!["undefined".to_string()]);
     assert!(result.is_err());
 }
 
-#[test]
-fn del_local_branch_t() {
-    let git = Git::open().unwrap();
-    let result = git.del_local_branch("undefined");
-    assert!(result.is_err());
-}
+// ---- branch CRUD ----
 
 #[test]
-fn diff_commits_t() {
-    let git = Git::open().unwrap();
-    let result = git.diff_commits("main", "test");
+fn del_local_branch_t() {
+    let (_td, git) = test_repo();
+    let result = git.del_local_branch("__nonexistent_branch__");
     assert!(result.is_err());
 }
 
 #[test]
 fn create_local_branch_t() {
-    let git = Git::open().unwrap();
-    let result = git.create_local_branch("main", "main");
+    let (_td, git) = test_repo();
+    let branches = git.get_local_branches().unwrap();
+    assert!(!branches.is_empty());
+    // Creating a branch with the same name as an existing one should fail
+    let result = git.create_local_branch(&branches[0], &branches[0]);
     assert!(result.is_err());
 }
 
 #[test]
 fn create_remote_branch_t() {
-    let git = Git::open().unwrap();
-    let result = git.create_remote_branch("test", "main", "main");
+    let (_td, git) = test_repo();
+    let result = git.create_remote_branch("origin", "main", "main");
     assert!(result.is_err());
 }
 
+// ---- branch listing ----
+
 #[test]
 fn get_local_branches_t() {
-    let git = Git::open().unwrap();
-    let current = git.current_branch().unwrap();
+    let (_td, git) = test_repo();
     let result = git.get_local_branches().unwrap();
-    assert!(result.iter().any(|x| x.as_str() == current));
+    assert!(!result.is_empty());
 }
 
 #[test]
 fn query_remote_branches_t() {
-    let git = Git::open().unwrap();
-    git.get_remote_branches("origin").unwrap();
+    let (_td, git) = test_repo();
+    // No remotes in test repo — just returns empty list
+    let result = git.get_remote_branches("origin").unwrap();
+    assert!(result.is_empty());
+}
+
+// ---- diff ----
+
+#[test]
+fn diff_commits_t() {
+    let (_td, git) = test_repo();
+    // Create a second branch so there's something to diff
+    {
+        let repo = git.repo.borrow();
+        let head = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.branch("feature", &head, false).unwrap();
+    }
+
+    let result = git.diff_commits("feature", &git.current_branch().unwrap());
+    assert!(result.is_ok());
+    assert!(result.unwrap().is_empty());
 }
 
 #[test]
 fn diff_logs_t() {
-    let git = Git::open().unwrap();
+    let (_td, git) = test_repo();
     let current = git.current_branch().unwrap();
     git.diff_logs(&current, &current).unwrap();
 }
 
-#[test]
-#[ignore]
-fn fetch_remote_branches_t() {
-    let git = Git::open().unwrap();
-    git.fetch_remote_data().unwrap();
-}
+// ---- remote ----
 
 #[test]
 fn get_remote_repos() {
-    let git = Git::open().unwrap();
+    let (_td, git) = test_repo();
+    // No remotes in test repo
     let repos = git.get_remote_repos().unwrap();
-    assert!(repos.iter().any(|x| x == "origin"));
-    assert_eq!(repos.len(), 1);
+    assert!(repos.is_empty());
 }
 
 #[test]
 fn del_remote_branch_t() {
-    let git = Git::open().unwrap();
-    let result = git.del_remote_branch("test", "main");
+    let (_td, git) = test_repo();
+    let result = git.del_remote_branch("origin", "main");
     assert!(result.is_err());
+}
+
+// ---- fetch (ignored — needs network) ----
+
+#[test]
+#[ignore]
+fn fetch_remote_branches_t() {
+    let (_td, git) = test_repo();
+    git.fetch_remote_data().unwrap();
 }
