@@ -1,15 +1,14 @@
 use std::str::FromStr;
 
-use regex::Regex;
-
 use super::*;
 
 #[test]
 fn get_global_config_path_t() {
     if env::consts::OS == "linux" {
         let global_config_path = get_global_config_path().unwrap();
-        let regex = Regex::new(r"^/home/.*/.config/git-flow/config.toml$").unwrap();
-        assert!(regex.is_match(global_config_path.to_str().unwrap()));
+        let home = env::var("HOME").unwrap();
+        let expected = PathBuf::from(&home).join(".config/git-flow/config.toml");
+        assert_eq!(global_config_path, expected);
     }
 }
 
