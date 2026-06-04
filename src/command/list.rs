@@ -18,6 +18,8 @@ struct BranchType {
     create: String,
     from: String,
     to: String,
+    remote: String,
+    tag_pattern: String,
     before_start: String,
     after_start: String,
     before_finish: String,
@@ -52,6 +54,8 @@ pub fn list_branch_types(config_path: Option<PathBuf>) {
                         .map(|y| y.name.clone())
                         .collect::<Vec<String>>()
                         .join(", "),
+                    remote: x.remote.clone().unwrap_or_default(),
+                    tag_pattern: x.tag_pattern.clone().unwrap_or_default(),
                     before_start: command_to_string(x.before_start.clone()),
                     after_start: command_to_string(x.after_start.clone()),
                     before_finish: command_to_string(x.before_finish.clone()),
@@ -71,7 +75,7 @@ pub fn list_branch_types(config_path: Option<PathBuf>) {
             println!(
                 "{}",
                 Table::new(branch_types)
-                    .with(Width::wrap(width).priority::<PriorityMax>())
+                    .with(Width::wrap(width).priority(PriorityMax::default()))
                     .with(Width::increase(width))
                     .to_string()
             )

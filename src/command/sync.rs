@@ -9,9 +9,17 @@ use crate::{
 };
 
 pub fn sync_repo_branches(target: SyncTarget, strategy: SyncStrategy) {
+    let git = match Git::open() {
+        Err(err) => {
+            Echo::error(err.to_string());
+            return;
+        }
+        Ok(git) => git,
+    };
+
     // -- fetch remote data --
     let finish = Echo::progress("fetch remote data");
-    let result = Git::fetch_remote_data();
+    let result = git.fetch_remote_data();
     match result {
         Err(err) => {
             finish(false, &err.to_string());
@@ -23,7 +31,7 @@ pub fn sync_repo_branches(target: SyncTarget, strategy: SyncStrategy) {
     }
 
     // -- select remote repo --
-    let repo = match select_repo() {
+    let repo = match select_repo(&git) {
         Err(err) => {
             Echo::error(err.to_string());
             return;
@@ -32,14 +40,14 @@ pub fn sync_repo_branches(target: SyncTarget, strategy: SyncStrategy) {
     };
 
     // -- get branches --
-    let local_branches = match Git::get_local_branches() {
+    let local_branches = match git.get_local_branches() {
         Err(err) => {
             Echo::error(err.to_string());
             return;
         }
         Ok(value) => value,
     };
-    let remote_branches = match Git::get_remote_branches(&repo) {
+    let remote_branches = match git.get_remote_branches(&repo) {
         Err(err) => {
             Echo::error(err.to_string());
             return;
@@ -48,12 +56,12 @@ pub fn sync_repo_branches(target: SyncTarget, strategy: SyncStrategy) {
     };
 
     // -- sync branches --
-    sync_branches(&repo, &target, &strategy, &local_branches, &remote_branches);
+    sync_branches(&git, &repo, &target, &strategy, &local_branches, &remote_branches);
 }
 
-fn select_repo() -> Result<String> {
+fn select_repo(git: &Git) -> Result<String> {
     // -- fetch repos --
-    let repos = Git::get_remote_repos()?;
+    let repos = git.get_remote_repos()?;
     if repos.len() == 0 {
         bail!("no remote repo specified");
     }
@@ -81,6 +89,7 @@ fn select_repo() -> Result<String> {
 }
 
 fn sync_branches(
+    git: &Git,
     repo: &str,
     target: &SyncTarget,
     strategy: &SyncStrategy,
@@ -119,7 +128,7 @@ fn sync_branches(
         } else {
             let finish = Echo::progress("remove redundant branches");
             for branch in &redundant_branches {
-                if let Err(err) = del_branch(target, repo, branch) {
+                if let Err(err) = del_branch(git, target, repo, branch) {
                     finish(false, &err.to_string());
                     return;
                 };
@@ -147,7 +156,7 @@ fn sync_branches(
 
     let finish = Echo::progress("create missing branches");
     for branch in &missing_branches {
-        if let Err(err) = create_branch(target, repo, branch) {
+        if let Err(err) = create_branch(git, target, repo, branch) {
             finish(false, &err.to_string());
             return;
         };
@@ -161,16 +170,16 @@ fn sync_branches(
     );
 }
 
-fn del_branch(target: &SyncTarget, repo: &str, branch: &str) -> Result<()> {
+fn del_branch(git: &Git, target: &SyncTarget, repo: &str, branch: &str) -> Result<()> {
     match target {
-        SyncTarget::Remote => Git::del_remote_branch(repo, branch),
-        SyncTarget::Local => Git::del_local_branch(branch),
+        SyncTarget::Remote => git.del_remote_branch(repo, branch),
+        SyncTarget::Local => git.del_local_branch(branch),
     }
 }
 
-fn create_branch(target: &SyncTarget, repo: &str, branch: &str) -> Result<()> {
+fn create_branch(git: &Git, target: &SyncTarget, repo: &str, branch: &str) -> Result<()> {
     match target {
-        SyncTarget::Remote => Git::create_remote_branch(repo, branch, branch),
-        SyncTarget::Local => Git::create_local_branch(&format!("{}/{}", repo, branch), branch),
+        SyncTarget::Remote => git.create_remote_branch(repo, branch, branch),
+        SyncTarget::Local => git.create_local_branch(&format!("{}/{}", repo, branch), branch),
     }
 }

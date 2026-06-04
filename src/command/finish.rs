@@ -8,9 +8,45 @@ use crate::{
     utils::run_hook,
 };
 
-pub fn finish_task(branch_name: String, branch_type: BranchType) {
+pub struct FinishOptions {
+    pub keep: bool,
+    pub tag: bool,
+    pub squash: bool,
+    pub push: bool,
+    pub fetch: bool,
+}
+
+pub fn finish_task(branch_name: String, branch_type: BranchType, opts: FinishOptions) {
+    let git = match Git::open() {
+        Err(err) => {
+            Echo::error(err.to_string());
+            return;
+        }
+        Ok(git) => git,
+    };
+
+    // -- fetch source branch if requested --
+    if opts.fetch {
+        let remote = branch_type.remote.clone().unwrap_or_else(|| {
+            git.get_remote_repos()
+                .ok()
+                .and_then(|r| r.first().cloned())
+                .unwrap_or_default()
+        });
+        if !remote.is_empty() {
+            let finish = Echo::progress(format!("fetch remote {}", remote));
+            match git.fetch_remote(&remote) {
+                Err(err) => {
+                    finish(false, &err.to_string());
+                    return;
+                }
+                Ok(_) => finish(true, &format!("fetch remote {}", remote)),
+            }
+        }
+    }
+
     // -- validate branches --
-    let branches = match Git::get_local_branches() {
+    let branches = match git.get_local_branches() {
         Err(err) => {
             Echo::error(err.to_string());
             return;
@@ -41,7 +77,13 @@ pub fn finish_task(branch_name: String, branch_type: BranchType) {
             if regex.is_match(x) {
                 target_branches.push(TargetBranch {
                     name: x.to_string(),
-                    strategy: y.strategy.clone(),
+                    strategy: if opts.squash {
+                        Strategy::Squash
+                    } else {
+                        y.strategy.clone()
+                    },
+                    push: y.push,
+                    tag: y.tag,
                 });
                 break;
             }
@@ -49,53 +91,72 @@ pub fn finish_task(branch_name: String, branch_type: BranchType) {
     });
 
     // -- resolve target branches --
-    if resolve_target_branches(&branch_name, &target_branches).is_err() {
+    if resolve_target_branches(&git, &branch_name, &target_branches).is_err() {
         return;
     }
 
-    // -- delete branch --
-    let finish = Echo::progress(format!("delete branch {}", &branch_name));
-    match Git::del_local_branch(&branch_name) {
-        Err(err) => {
-            finish(false, &err.to_string());
-            return;
+    // -- push target branches if configured or requested --
+    if opts.push {
+        push_target_branches(&git, &branch_type, &target_branches);
+    }
+
+    // -- create tag if requested --
+    if opts.tag {
+        create_finish_tag(&git, &branch_name, &branch_type);
+    }
+
+    // -- delete branch (unless --keep) --
+    if !opts.keep {
+        let finish = Echo::progress(format!("delete branch {}", &branch_name));
+        match git.del_local_branch(&branch_name) {
+            Err(err) => {
+                finish(false, &err.to_string());
+                return;
+            }
+            Ok(_) => finish(true, &format!("delete branch {}", &branch_name)),
         }
-        Ok(_) => finish(true, &format!("delete branch {}", &branch_name)),
+    } else {
+        Echo::info(&format!("keeping branch {}", &branch_name));
     }
 
     // -- run after finish hook --
     let _ = run_hook(branch_type.after_finish.clone(), &branch_name, &branch_type);
 }
 
-fn resolve_target_branches(branch_name: &str, target_branches: &Vec<TargetBranch>) -> Result<()> {
+fn resolve_target_branches(
+    git: &Git,
+    branch_name: &str,
+    target_branches: &Vec<TargetBranch>,
+) -> Result<()> {
     for x in target_branches.iter() {
         match x.strategy {
             Strategy::Merge => {
-                merge(branch_name, &x.name)?;
+                merge(git, branch_name, &x.name)?;
             }
             Strategy::Rebase => {
-                rebase(branch_name, &x.name)?;
+                rebase(git, branch_name, &x.name)?;
             }
             Strategy::CherryPick => {
-                cherry_pick(branch_name, &x.name)?;
+                cherry_pick(git, branch_name, &x.name)?;
+            }
+            Strategy::Squash => {
+                squash_merge(git, branch_name, &x.name)?;
             }
         }
     }
     Ok(())
 }
 
-fn merge(source_branch: &str, target_branch: &str) -> Result<()> {
+fn merge(git: &Git, source_branch: &str, target_branch: &str) -> Result<()> {
     let finish = Echo::progress(format!("merge {} into {}", source_branch, target_branch));
 
-    // -- switch --
-    let result = Git::switch(target_branch);
+    let result = git.switch(target_branch);
     if let Err(err) = result {
         finish(false, &err.to_string());
         bail!("");
     }
 
-    // -- merge --
-    let result = Git::merge(source_branch);
+    let result = git.merge(source_branch);
     if let Err(err) = result {
         finish(false, &err.to_string());
         bail!("");
@@ -108,18 +169,16 @@ fn merge(source_branch: &str, target_branch: &str) -> Result<()> {
     Ok(())
 }
 
-fn rebase(source_branch: &str, target_branch: &str) -> Result<()> {
+fn rebase(git: &Git, source_branch: &str, target_branch: &str) -> Result<()> {
     let finish = Echo::progress(format!("rebase {} onto {}", target_branch, source_branch));
 
-    // -- switch --
-    let result = Git::switch(target_branch);
+    let result = git.switch(target_branch);
     if let Err(err) = result {
         finish(false, &err.to_string());
         bail!("");
     }
 
-    // -- rebase --
-    let result = Git::rebase(source_branch);
+    let result = git.rebase(source_branch);
     if let Err(err) = result {
         finish(false, &err.to_string());
         bail!("");
@@ -132,9 +191,8 @@ fn rebase(source_branch: &str, target_branch: &str) -> Result<()> {
     Ok(())
 }
 
-fn cherry_pick(source_branch: &str, target_branch: &str) -> Result<()> {
-    // -- get diff commits --
-    let commits = match Git::diff_commits(source_branch, target_branch) {
+fn cherry_pick(git: &Git, source_branch: &str, target_branch: &str) -> Result<()> {
+    let commits = match git.diff_commits(source_branch, target_branch) {
         Err(err) => {
             Echo::error(err.to_string());
             bail!("");
@@ -157,15 +215,13 @@ fn cherry_pick(source_branch: &str, target_branch: &str) -> Result<()> {
     };
     let finish = Echo::progress(&msg);
 
-    // -- switch --
-    let result = Git::switch(target_branch);
+    let result = git.switch(target_branch);
     if let Err(err) = result {
         finish(false, &err.to_string());
         bail!("");
     }
 
-    // -- cherry pick --
-    let result = Git::cherry_pick(commits);
+    let result = git.cherry_pick(commits);
     if let Err(err) = result {
         finish(false, &err.to_string());
         bail!("");
@@ -173,4 +229,72 @@ fn cherry_pick(source_branch: &str, target_branch: &str) -> Result<()> {
 
     finish(true, &msg);
     Ok(())
+}
+
+fn squash_merge(git: &Git, source_branch: &str, target_branch: &str) -> Result<()> {
+    let finish = Echo::progress(format!("squash merge {} into {}", source_branch, target_branch));
+
+    let result = git.switch(target_branch);
+    if let Err(err) = result {
+        finish(false, &err.to_string());
+        bail!("");
+    }
+
+    let result = git.squash_merge(source_branch);
+    if let Err(err) = result {
+        finish(false, &err.to_string());
+        bail!("");
+    }
+
+    finish(
+        true,
+        &format!("squash merge {} into {}", source_branch, target_branch),
+    );
+    Ok(())
+}
+
+fn push_target_branches(git: &Git, branch_type: &BranchType, target_branches: &[TargetBranch]) {
+    let remote = match &branch_type.remote {
+        Some(r) => r.clone(),
+        None => return,
+    };
+
+    for tb in target_branches {
+        // Check if this target has push enabled, or if --push was used (push all)
+        let should_push = tb.push.unwrap_or(true); // --push pushes all targets
+        if should_push {
+            let finish = Echo::progress(format!("push {} to {}", tb.name, remote));
+            match git.push_branch(&remote, &tb.name, &tb.name) {
+                Err(err) => {
+                    finish(false, &err.to_string());
+                }
+                Ok(_) => finish(true, &format!("push {} to {}", tb.name, remote)),
+            }
+        }
+    }
+}
+
+fn create_finish_tag(git: &Git, branch_name: &str, branch_type: &BranchType) {
+    let tag_pattern = match &branch_type.tag_pattern {
+        Some(p) => p.clone(),
+        None => {
+            // Auto-generate tag name from branch name
+            let prefix = format!("{}/", branch_type.name);
+            let tag_name = branch_name.strip_prefix(&prefix).unwrap_or(branch_name);
+            format!("v{}", tag_name)
+        }
+    };
+
+    // Replace {NAME} placeholder
+    let prefix = format!("{}/", branch_type.name);
+    let short_name = branch_name.strip_prefix(&prefix).unwrap_or(branch_name);
+    let tag_name = tag_pattern.replace("{NAME}", short_name);
+
+    let finish = Echo::progress(format!("create tag {}", tag_name));
+    match git.create_tag(&tag_name, &format!("Release {}", tag_name)) {
+        Err(err) => {
+            finish(false, &err.to_string());
+        }
+        Ok(_) => finish(true, &format!("create tag {}", tag_name)),
+    }
 }

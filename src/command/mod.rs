@@ -1,7 +1,12 @@
+pub mod abort_cmd;
 pub mod check;
+pub mod continue_cmd;
 pub mod drop;
 pub mod finish;
+pub mod init;
 pub mod list;
+pub mod publish;
+pub mod rebase_cmd;
 pub mod start;
 pub mod sync;
 pub mod track;

@@ -1,8 +1,16 @@
 use crate::{config::definition::BranchType, echo::Echo, git::Git};
 
 pub fn track_task(branch_name: String, branch_type: BranchType) {
+    let git = match Git::open() {
+        Err(err) => {
+            Echo::error(err.to_string());
+            return;
+        }
+        Ok(git) => git,
+    };
+
     // -- validate branches --
-    let branches = match Git::get_local_branches() {
+    let branches = match git.get_local_branches() {
         Err(err) => {
             Echo::error(err.to_string());
             return;
@@ -15,7 +23,7 @@ pub fn track_task(branch_name: String, branch_type: BranchType) {
     }
 
     // -- get diff commits --
-    let commits = match Git::diff_commits(&branch_name, &branch_type.from) {
+    let commits = match git.diff_commits(&branch_name, &branch_type.from) {
         Err(err) => {
             Echo::error(err.to_string());
             return;
@@ -33,7 +41,7 @@ pub fn track_task(branch_name: String, branch_type: BranchType) {
             "these commits are ahead of the source branch {}:\n",
             &branch_type.from,
         ));
-        if let Err(err) = Git::diff_logs(&branch_name, &branch_type.from) {
+        if let Err(err) = git.diff_logs(&branch_name, &branch_type.from) {
             Echo::error(err.to_string());
         };
     }

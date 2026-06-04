@@ -1,8 +1,16 @@
 use crate::{config::definition::BranchType, echo::Echo, git::Git, utils::run_hook};
 
 pub fn drop_task(branch_name: String, branch_type: BranchType) {
+    let git = match Git::open() {
+        Err(err) => {
+            Echo::error(err.to_string());
+            return;
+        }
+        Ok(git) => git,
+    };
+
     // -- validate branches --
-    let branches = match Git::get_local_branches() {
+    let branches = match git.get_local_branches() {
         Err(err) => {
             Echo::error(err.to_string());
             return;
@@ -21,7 +29,7 @@ pub fn drop_task(branch_name: String, branch_type: BranchType) {
 
     // -- switch to source branch --
     let finish = Echo::progress(format!("switch to branch {}", &branch_type.from));
-    match Git::switch(&branch_type.from) {
+    match git.switch(&branch_type.from) {
         Err(err) => {
             finish(false, &err.to_string());
             return;
@@ -31,7 +39,7 @@ pub fn drop_task(branch_name: String, branch_type: BranchType) {
 
     // -- delete branch --
     let finish = Echo::progress(format!("delete branch {}", &branch_name));
-    match Git::del_local_branch(&branch_name) {
+    match git.del_local_branch(&branch_name) {
         Err(err) => {
             finish(false, &err.to_string());
             return;

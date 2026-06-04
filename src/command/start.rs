@@ -1,8 +1,36 @@
 use crate::{config::definition::BranchType, echo::Echo, git::Git, utils::run_hook};
 
-pub fn start_task(branch_name: String, branch_type: BranchType) {
+pub fn start_task(branch_name: String, branch_type: BranchType, fetch: bool) {
+    let git = match Git::open() {
+        Err(err) => {
+            Echo::error(err.to_string());
+            return;
+        }
+        Ok(git) => git,
+    };
+
+    // -- fetch source branch if requested --
+    if fetch {
+        let remote = branch_type.remote.clone().unwrap_or_else(|| {
+            git.get_remote_repos()
+                .ok()
+                .and_then(|r| r.first().cloned())
+                .unwrap_or_default()
+        });
+        if !remote.is_empty() {
+            let finish = Echo::progress(format!("fetch remote {}", remote));
+            match git.fetch_remote(&remote) {
+                Err(err) => {
+                    finish(false, &err.to_string());
+                    return;
+                }
+                Ok(_) => finish(true, &format!("fetch remote {}", remote)),
+            }
+        }
+    }
+
     // -- validate branches --
-    let branches = match Git::get_local_branches() {
+    let branches = match git.get_local_branches() {
         Err(err) => {
             Echo::error(err.to_string());
             return;
@@ -25,7 +53,7 @@ pub fn start_task(branch_name: String, branch_type: BranchType) {
 
     // -- create new branch --
     let finish = Echo::progress(format!("create new branch {}", &branch_name));
-    match Git::create_local_branch(&branch_type.from, &branch_name) {
+    match git.create_local_branch(&branch_type.from, &branch_name) {
         Err(err) => {
             finish(false, &err.to_string());
             return;
@@ -35,7 +63,7 @@ pub fn start_task(branch_name: String, branch_type: BranchType) {
 
     // -- switch to new branch --
     let finish = Echo::progress(format!("switch to new branch {}", &branch_name));
-    match Git::switch(&branch_name) {
+    match git.switch(&branch_name) {
         Err(err) => {
             finish(false, &err.to_string());
             return;

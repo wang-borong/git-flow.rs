@@ -14,12 +14,7 @@ use crate::{
 
 pub fn env_valid() -> bool {
     if !Git::git_installed() {
-        Echo::error("git command is not found");
-        return false;
-    }
-
-    if !Git::in_git_project() {
-        Echo::error("not in a git project");
+        Echo::error("not in a git project (or git2 unavailable)");
         return false;
     }
 
