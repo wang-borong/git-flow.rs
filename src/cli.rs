@@ -113,6 +113,11 @@ pub enum Command {
         /// new name of the branch
         new_name: String,
     },
+    /// Publish current branch (shorthand)
+    Publish {
+        /// branch name (optional, defaults to current)
+        name: Option<String>,
+    },
     /// continue after resolving conflicts
     Continue,
     /// abort current operation and restore previous state
@@ -135,6 +140,8 @@ pub enum Command {
     },
     /// list available branch types
     List,
+    /// display a comprehensive overview of repository status
+    Overview,
 }
 
 #[derive(Debug, Subcommand)]
@@ -204,6 +211,8 @@ pub enum FeatureAction {
     Track { name: String },
     /// List feature branches
     List { pattern: Option<String> },
+    /// Publish a feature branch
+    Publish { name: Option<String> },
 }
 
 #[derive(Debug, Subcommand)]
@@ -275,6 +284,8 @@ pub enum ReleaseAction {
     Track { name: String },
     /// List release branches
     List { pattern: Option<String> },
+    /// Publish a release branch
+    Publish { name: Option<String> },
 }
 
 #[derive(Debug, Subcommand)]
@@ -344,6 +355,8 @@ pub enum HotfixAction {
     Track { name: String },
     /// List hotfix branches
     List { pattern: Option<String> },
+    /// Publish a hotfix branch
+    Publish { name: Option<String> },
 }
 
 #[derive(Debug, Subcommand)]
@@ -439,6 +452,8 @@ pub enum GeneralAction {
     Checkout { name: String },
     /// List general branches
     List { pattern: Option<String> },
+    /// Publish a general branch
+    Publish { name: Option<String> },
 }
 
 #[derive(Debug, Clone, ValueEnum)]

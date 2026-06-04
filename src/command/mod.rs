@@ -8,6 +8,7 @@ pub mod drop;
 pub mod finish;
 pub mod init;
 pub mod list;
+pub mod overview;
 pub mod publish;
 pub mod rebase_cmd;
 pub mod rename;

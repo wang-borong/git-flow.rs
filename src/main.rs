@@ -171,7 +171,7 @@ fn resolve_branch_info(
     };
 
     let mut sorted_bts = config.branch_types.clone();
-    sorted_bts.sort_by(|a, b| b.create.len().cmp(&a.create.len()));
+    sorted_bts.sort_by_key(|b| std::cmp::Reverse(b.create.len()));
 
     for bt in &sorted_bts {
         let mut pattern = bt.create.clone();
@@ -237,6 +237,7 @@ async fn main() {
             clap_complete::generate(*shell, &mut cmd, "gitflow", &mut std::io::stdout());
         }
         Command::List => command::list::list_branch_types(args.config),
+        Command::Overview => command::overview::show_overview(args.config),
         Command::Check { file_path } => command::check::check_config(file_path.clone()),
         Command::Init => command::init::init_config(),
         Command::Continue => command::continue_cmd::continue_operation(),
@@ -422,6 +423,14 @@ async fn main() {
                 FeatureAction::List { pattern } => {
                     command::list::list_branches("feature", pattern.clone(), args.config.clone());
                 }
+                FeatureAction::Publish { name } => {
+                    match resolve_branch_info("feature", name.clone(), None, args.config.clone()) {
+                        Err(err) => Echo::error(err.to_string()),
+                        Ok((branch_name, branch_type)) => {
+                            command::publish::publish_branch(branch_name, branch_type);
+                        }
+                    }
+                }
             }
         }
 
@@ -598,6 +607,14 @@ async fn main() {
                 ReleaseAction::List { pattern } => {
                     command::list::list_branches("release", pattern.clone(), args.config.clone());
                 }
+                ReleaseAction::Publish { name } => {
+                    match resolve_branch_info("release", name.clone(), None, args.config.clone()) {
+                        Err(err) => Echo::error(err.to_string()),
+                        Ok((branch_name, branch_type)) => {
+                            command::publish::publish_branch(branch_name, branch_type);
+                        }
+                    }
+                }
             }
         }
 
@@ -765,6 +782,14 @@ async fn main() {
                 }
                 HotfixAction::List { pattern } => {
                     command::list::list_branches("hotfix", pattern.clone(), args.config.clone());
+                }
+                HotfixAction::Publish { name } => {
+                    match resolve_branch_info("hotfix", name.clone(), None, args.config.clone()) {
+                        Err(err) => Echo::error(err.to_string()),
+                        Ok((branch_name, branch_type)) => {
+                            command::publish::publish_branch(branch_name, branch_type);
+                        }
+                    }
                 }
             }
         }
@@ -1108,6 +1133,14 @@ async fn main() {
                 GeneralAction::List { pattern } => {
                     command::list::list_branches("general", pattern.clone(), args.config.clone());
                 }
+                GeneralAction::Publish { name } => {
+                    match resolve_branch_info("general", name.clone(), None, args.config.clone()) {
+                        Err(err) => Echo::error(err.to_string()),
+                        Ok((branch_name, branch_type)) => {
+                            command::publish::publish_branch(branch_name, branch_type);
+                        }
+                    }
+                }
             }
         }
 
@@ -1271,6 +1304,69 @@ async fn main() {
 
                     let new_full_name = format!("{}{}", prefix, new_name);
                     command::rename::rename_branch(branch_name, new_full_name, branch_type);
+                }
+            }
+        }
+
+        // -- Global Publish shorthand --
+        Command::Publish { name } => {
+            if !env_valid() {
+                return;
+            }
+            let git = match Git::open() {
+                Ok(g) => g,
+                Err(err) => {
+                    Echo::error(err.to_string());
+                    return;
+                }
+            };
+            let branch_name = match name {
+                Some(ref n) => {
+                    if n.contains('/') {
+                        n.clone()
+                    } else {
+                        match git.get_local_branches() {
+                            Ok(branches) => {
+                                let matches: Vec<String> = branches
+                                    .into_iter()
+                                    .filter(|b| b == n || b.ends_with(&format!("/{}", n)))
+                                    .collect();
+                                if matches.len() == 1 {
+                                    matches[0].clone()
+                                } else if matches.is_empty() {
+                                    Echo::error(format!(
+                                        "Could not find local branch matching '{}'",
+                                        n
+                                    ));
+                                    return;
+                                } else {
+                                    Echo::error(format!(
+                                        "Ambiguous branch name '{}'. Matches: {:?}",
+                                        n, matches
+                                    ));
+                                    return;
+                                }
+                            }
+                            Err(err) => {
+                                Echo::error(err.to_string());
+                                return;
+                            }
+                        }
+                    }
+                }
+                None => match git.current_branch() {
+                    Ok(c) => c,
+                    Err(err) => {
+                        Echo::error(err.to_string());
+                        return;
+                    }
+                },
+            };
+
+            match get_branch_type_name(branch_name.clone(), None, args.config.clone()) {
+                Err(err) => Echo::error(err.to_string()),
+                Ok((resolved_branch, branch_type)) => {
+                    command::publish::publish_branch(resolved_branch, branch_type);
                 }
             }
         }

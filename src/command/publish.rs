@@ -1,6 +1,5 @@
 use crate::{config::definition::BranchType, echo::Echo, git::Git, utils::run_hook};
 
-#[allow(dead_code)]
 pub fn publish_branch(branch_name: String, branch_type: BranchType) {
     let git = match Git::open() {
         Err(err) => {

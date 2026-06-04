@@ -156,4 +156,17 @@ impl Git {
         branch.rename(new_branch, false)?;
         Ok(())
     }
+
+    /// Calculate ahead and behind commits for a branch relative to a base branch.
+    pub fn get_ahead_behind(
+        &self,
+        local_branch: &str,
+        base_branch: &str,
+    ) -> Result<(usize, usize)> {
+        let repo = self.repo.borrow();
+        let local_obj = repo.revparse_single(local_branch)?;
+        let base_obj = repo.revparse_single(base_branch)?;
+        let (ahead, behind) = repo.graph_ahead_behind(local_obj.id(), base_obj.id())?;
+        Ok((ahead, behind))
+    }
 }

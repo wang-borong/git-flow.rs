@@ -188,9 +188,15 @@ fn infer_main_branch(branch_type: &BranchType) -> Option<String> {
 }
 
 fn format_commit_message(template: &str, source_branch: &str, target_branch: &str) -> String {
+    let full_source = format!("refs/heads/{}", source_branch);
+    let full_target = format!("refs/heads/{}", target_branch);
     template
+        .replace("%%", "\x00percent\x00")
+        .replace("%B", &full_source)
         .replace("%b", source_branch)
+        .replace("%P", &full_target)
         .replace("%p", target_branch)
+        .replace("\x00percent\x00", "%")
 }
 
 fn merge(
