@@ -127,12 +127,8 @@ impl Git {
         let ancestor_tree = ancestor_commit.tree()?;
 
         let merge_opts = git2::MergeOptions::new();
-        let mut index = repo.merge_trees(
-            &ancestor_tree,
-            &head_tree,
-            &source_tree,
-            Some(&merge_opts),
-        )?;
+        let mut index =
+            repo.merge_trees(&ancestor_tree, &head_tree, &source_tree, Some(&merge_opts))?;
 
         if index.has_conflicts() {
             bail!("squash merge conflict detected, resolve manually");
