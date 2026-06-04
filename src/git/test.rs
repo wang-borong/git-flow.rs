@@ -8,11 +8,13 @@ fn test_repo() -> (TempDir, Git) {
     let path = td.path();
 
     // Use git CLI for reliable repo setup
-    std::process::Command::new("git")
-        .args(["init", "-b", "main"])
+    let output = std::process::Command::new("git")
+        .arg("init")
         .current_dir(path)
         .output()
         .unwrap();
+    assert!(output.status.success(), "git init failed: {}", String::from_utf8_lossy(&output.stderr));
+
     std::process::Command::new("git")
         .args(["config", "user.name", "test"])
         .current_dir(path)
@@ -23,11 +25,20 @@ fn test_repo() -> (TempDir, Git) {
         .current_dir(path)
         .output()
         .unwrap();
-    std::process::Command::new("git")
+    
+    // Config default initial branch if needed, but since we commit first:
+    let output = std::process::Command::new("git")
         .args(["commit", "--allow-empty", "-m", "init"])
         .current_dir(path)
         .output()
         .unwrap();
+    assert!(output.status.success(), "git commit failed: {}", String::from_utf8_lossy(&output.stderr));
+
+    // Rename active branch to main for consistency
+    let _ = std::process::Command::new("git")
+        .args(["branch", "-m", "main"])
+        .current_dir(path)
+        .output();
 
     let repo = Repository::open(path).unwrap();
     let git = Git::from_repo(repo);
