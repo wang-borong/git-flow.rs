@@ -131,7 +131,7 @@ pub fn parse_yqm_config(toml_content: &str) -> Result<Config> {
         create: "feature/customer-{{NAME}}/{{FEATURE}}".to_string(),
         from: format!("{}{{NAME}}", customer_prefix),
         to: vec![TargetBranch {
-            name: format!("{}{{NAME}}", customer_prefix),
+            name: format!("{}.*", customer_prefix),
             strategy: default_strategy.clone(),
             push: None,
             tag: None,
@@ -183,7 +183,7 @@ pub fn parse_yqm_config(toml_content: &str) -> Result<Config> {
         create: "hotfix/customer-{{NAME}}/{{FIX}}".to_string(),
         from: format!("{}{{NAME}}", customer_prefix),
         to: vec![TargetBranch {
-            name: format!("{}{{NAME}}", customer_prefix),
+            name: format!("{}.*", customer_prefix),
             strategy: default_strategy.clone(),
             push: None,
             tag: None,
@@ -256,31 +256,9 @@ pub fn parse_yqm_config(toml_content: &str) -> Result<Config> {
                 before_rebase: None,
                 after_rebase: hook_cmd(&yqm.hooks.post_tag),
             });
-
-            // Customer release (from customer/x, merge→customer/x, tag)
-            branch_types.push(BranchType {
-                name: "customer-release".to_string(),
-                create: format!("{}{{NAME}}", release_config.prefix),
-                from: format!("{}{{CUSTOMER}}", customer_prefix),
-                to: vec![TargetBranch {
-                    name: format!("{}{{CUSTOMER}}", customer_prefix),
-                    strategy: release_strategy.clone(),
-                    push: None,
-                    tag: Some(true),
-                }],
-                remote: None,
-                tag_pattern: Some("{{NAME}}".to_string()),
-                before_start: None,
-                after_start: None,
-                before_finish: None,
-                after_finish: hook_cmd(&yqm.hooks.post_finish),
-                before_drop: None,
-                after_drop: None,
-                before_publish: None,
-                after_publish: None,
-                before_rebase: None,
-                after_rebase: hook_cmd(&yqm.hooks.post_tag),
-            });
+            // Customer release uses the same branch type with --customer flag
+            // at runtime (e.g. `git flow start v1.0-hw.1 release --customer huawei`)
+            // which overrides from/to dynamically. No separate branch type needed.
         }
     }
 
@@ -358,7 +336,8 @@ customer_sync_strategy = "merge"
 "#;
         let config = parse_yqm_config(toml).unwrap();
         assert!(config.branch_types.iter().any(|b| b.name == "release"));
-        assert!(config
+        // Customer release uses the same branch type with --customer flag at runtime
+        assert!(!config
             .branch_types
             .iter()
             .any(|b| b.name == "customer-release"));

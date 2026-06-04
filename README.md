@@ -1,4 +1,4 @@
-# git-flow.rs
+# gitflow.rs
 
 Extensible git flow written in Rust.
 
@@ -11,10 +11,10 @@ Extensible git flow written in Rust.
 ## Installation
 
 ```sh
-cargo install git-flow-rs
+cargo install gitflow-rs
 ```
 
-Or download from [GitHub Releases](https://github.com/niuiic/git-flow.rs/releases).
+Or download from [GitHub Releases](https://github.com/niuiic/gitflow.rs/releases).
 
 ## Quick Start
 
@@ -33,7 +33,7 @@ git flow finish feature/my-feature
 ## Commands
 
 ```
-Usage: git-flow [OPTIONS] <COMMAND>
+Usage: gitflow [OPTIONS] <COMMAND>
 
 Commands:
   start      start a task
@@ -44,7 +44,7 @@ Commands:
   list       list available branch types
   check      validate a config file
   complete   generate shell completion (bash/zsh/fish/elvish/powershell)
-  init       initialize git-flow config interactively
+  init       initialize gitflow config interactively
   publish    publish current branch to remote
   rebase     rebase current branch onto its source branch
   continue   continue after resolving conflicts
@@ -125,7 +125,7 @@ git flow customer list
 # Generate completion script
 git flow complete bash >> ~/.bashrc
 git flow complete zsh >> ~/.zshrc
-git flow complete fish > ~/.config/fish/completions/git-flow.fish
+git flow complete fish > ~/.config/fish/completions/gitflow.fish
 ```
 
 ## Configuration
@@ -133,8 +133,8 @@ git flow complete fish > ~/.config/fish/completions/git-flow.fish
 Config file locations (in priority order):
 
 1. Explicit path: `git flow -c /path/to/config.toml <command>`
-2. Local: `<GitRoot>/.git-flow.toml`
-3. Global: `~/.config/git-flow/config.toml` (Linux/macOS) or `%APPDATA%/git-flow/config.toml` (Windows)
+2. Local: `<GitRoot>/.gitflow.toml`
+3. Global: `~/.config/gitflow/config.toml` (Linux/macOS) or `%APPDATA%/gitflow/config.toml` (Windows)
 
 ### New Format (yqm)
 

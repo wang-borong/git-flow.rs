@@ -46,7 +46,7 @@ pub fn rebase_branch(branch_name: String, branch_type: BranchType) {
     match git.rebase(&branch_type.from) {
         Err(err) => {
             finish(false, &err.to_string());
-            Echo::info("resolve conflicts, then run `git-flow continue`");
+            Echo::info("resolve conflicts, then run `gitflow continue`");
             return;
         }
         Ok(_) => finish(

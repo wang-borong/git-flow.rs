@@ -7,7 +7,7 @@ fn get_global_config_path_t() {
     if env::consts::OS == "linux" {
         let global_config_path = get_global_config_path().unwrap();
         let home = env::var("HOME").unwrap();
-        let expected = PathBuf::from(&home).join(".config/git-flow/config.toml");
+        let expected = PathBuf::from(&home).join(".config/gitflow/config.toml");
         assert_eq!(global_config_path, expected);
     }
 }

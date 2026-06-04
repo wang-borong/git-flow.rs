@@ -116,7 +116,7 @@ pub fn sync_customer(customer_name: &str, main_branch: &str, push: bool, remote:
     match git.merge(main_branch) {
         Err(err) => {
             finish(false, &err.to_string());
-            Echo::info("resolve conflicts, then run `git-flow continue`");
+            Echo::info("resolve conflicts, then run `gitflow continue`");
             return;
         }
         Ok(_) => finish(

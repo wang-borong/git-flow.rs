@@ -10,12 +10,12 @@ fn get_global_config_path() -> Result<PathBuf> {
         "windows" => {
             let data_dir =
                 env::var_os("APPDATA").ok_or(anyhow!("system env arg 'APPDATA' is missing"))?;
-            Ok(PathBuf::from(data_dir).join("git-flow/config.toml"))
+            Ok(PathBuf::from(data_dir).join("gitflow/config.toml"))
         }
         _ => {
             let home_dir =
                 env::var_os("HOME").ok_or(anyhow!("system env arg 'HOME' is missing"))?;
-            Ok(PathBuf::from(home_dir).join(".config/git-flow/config.toml"))
+            Ok(PathBuf::from(home_dir).join(".config/gitflow/config.toml"))
         }
     }
 }
@@ -26,12 +26,12 @@ fn get_local_config_path() -> Result<PathBuf> {
     while cur_dir.parent().is_some() {
         let git_dir = cur_dir.join(".git");
         if git_dir.exists() && git_dir.is_dir() {
-            return Ok(cur_dir.join(".git-flow.toml"));
+            return Ok(cur_dir.join(".gitflow.toml"));
         }
         cur_dir.pop();
     }
 
-    Ok(cur_dir.join(".git-flow.toml"))
+    Ok(cur_dir.join(".gitflow.toml"))
 }
 
 pub fn get_config_path_list() -> Result<Vec<PathBuf>> {

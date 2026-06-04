@@ -13,7 +13,7 @@ pub fn init_config() {
 }
 
 fn interactive_init() -> Result<PathBuf> {
-    println!("git-flow interactive configuration\n");
+    println!("gitflow interactive configuration\n");
 
     // -- select base template --
     println!("Select a template:");
@@ -40,8 +40,8 @@ fn interactive_init() -> Result<PathBuf> {
 
     // -- select output path --
     println!("\nWhere to save the config?");
-    println!("[1] Local (.git-flow.toml in repo root)");
-    println!("[2] Global (~/.config/git-flow/config.toml)");
+    println!("[1] Local (.gitflow.toml in repo root)");
+    println!("[2] Global (~/.config/gitflow/config.toml)");
     print!("Choice (1-2): ");
     io::stdout().flush()?;
 
@@ -51,7 +51,7 @@ fn interactive_init() -> Result<PathBuf> {
         "1" => {
             let repo = git2::Repository::open_from_env()?;
             let workdir = repo.workdir().unwrap_or(repo.path());
-            workdir.join(".git-flow.toml")
+            workdir.join(".gitflow.toml")
         }
         "2" => {
             let config_dir = dirs_config_dir()?;
@@ -258,5 +258,5 @@ fn dirs_config_dir() -> Result<PathBuf> {
     if home.is_empty() {
         bail!("cannot determine home directory");
     }
-    Ok(PathBuf::from(home).join(".config").join("git-flow"))
+    Ok(PathBuf::from(home).join(".config").join("gitflow"))
 }

@@ -20,7 +20,7 @@ async fn main() {
         // -- commands that don't require env_valid --
         Command::Complete { shell } => {
             let mut cmd = Args::command();
-            clap_complete::generate(*shell, &mut cmd, "git-flow", &mut std::io::stdout());
+            clap_complete::generate(*shell, &mut cmd, "gitflow", &mut std::io::stdout());
         }
         Command::List => command::list::list_branch_types(args.config),
         Command::Check { file_path } => command::check::check_config(file_path.clone()),

@@ -1,5 +1,5 @@
 [package]
-name = "git-flow-rs"
+name = "gitflow"
 version = "0.5.0"
 edition = "2021"
 authors = ["Jason Wang <wleovm@gmail.com>"]

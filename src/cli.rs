@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 
 #[derive(Debug, Parser)]
-#[clap(name = "git-flow", version)]
+#[clap(name = "gitflow", version)]
 pub struct Args {
     #[arg(short, long, value_name = "FILE")]
     pub config: Option<PathBuf>,
@@ -87,7 +87,7 @@ pub enum Command {
         #[arg(value_enum)]
         shell: Shell,
     },
-    /// initialize git-flow config interactively
+    /// initialize gitflow config interactively
     Init,
     /// publish current branch to remote
     Publish {
