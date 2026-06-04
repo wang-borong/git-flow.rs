@@ -1,9 +1,4 @@
-use crate::{
-    config::definition::BranchType,
-    echo::Echo,
-    git::Git,
-    utils::run_hook,
-};
+use crate::{config::definition::BranchType, echo::Echo, git::Git, utils::run_hook};
 
 pub fn rebase_branch(branch_name: String, branch_type: BranchType) {
     let git = match Git::open() {
@@ -47,10 +42,7 @@ pub fn rebase_branch(branch_name: String, branch_type: BranchType) {
     finish(true, &format!("switch to branch {}", &branch_name));
 
     // -- rebase onto source --
-    let finish = Echo::progress(format!(
-        "rebase {} onto {}",
-        branch_name, branch_type.from
-    ));
+    let finish = Echo::progress(format!("rebase {} onto {}", branch_name, branch_type.from));
     match git.rebase(&branch_type.from) {
         Err(err) => {
             finish(false, &err.to_string());
@@ -64,9 +56,5 @@ pub fn rebase_branch(branch_name: String, branch_type: BranchType) {
     }
 
     // -- run after rebase hook --
-    let _ = run_hook(
-        branch_type.after_rebase.clone(),
-        &branch_name,
-        &branch_type,
-    );
+    let _ = run_hook(branch_type.after_rebase.clone(), &branch_name, &branch_type);
 }

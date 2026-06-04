@@ -2,7 +2,7 @@ use std::{fs::File, io::Read, path::PathBuf};
 
 use anyhow::{bail, Context, Result};
 
-use super::{definition, path, validate::validate_config};
+use super::{definition, path, validate::validate_config, yqm};
 
 #[cfg(test)]
 mod test;
@@ -28,8 +28,12 @@ pub fn read_config(config_path: Option<PathBuf>) -> Result<definition::Config> {
     let mut text = String::new();
     config_file.unwrap().read_to_string(&mut text)?;
 
-    // -- parse config --
-    let config = toml::from_str::<definition::Config>(&text).context("unable to parse config")?;
+    // -- detect format and parse --
+    let config = if yqm::is_yqm_format(&text) {
+        yqm::parse_yqm_config(&text).context("unable to parse yqm config")?
+    } else {
+        toml::from_str::<definition::Config>(&text).context("unable to parse config")?
+    };
 
     // -- validate --
     match validate_config(&config) {

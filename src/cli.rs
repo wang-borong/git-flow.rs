@@ -31,6 +31,9 @@ pub enum Command {
         /// fetch source branch before creating
         #[arg(long)]
         fetch: bool,
+        /// create from a customer branch instead of main
+        #[arg(long)]
+        customer: Option<String>,
     },
     /// finish a task
     Finish {
@@ -52,6 +55,9 @@ pub enum Command {
         /// fetch source branch before finish
         #[arg(long)]
         fetch: bool,
+        /// merge to a customer branch instead of main
+        #[arg(long)]
+        customer: Option<String>,
     },
     /// drop a task
     Drop {
@@ -99,6 +105,33 @@ pub enum Command {
     Continue,
     /// abort current operation and restore previous state
     Abort,
+    /// manage customer branches
+    Customer {
+        #[command(subcommand)]
+        action: CustomerAction,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CustomerAction {
+    /// create a customer branch from main
+    Create {
+        /// customer name (e.g. aliyun)
+        customer_name: String,
+        /// push to remote after creation
+        #[arg(long)]
+        push: bool,
+    },
+    /// sync main changes into customer branch
+    Sync {
+        /// customer name or "all" to sync all customers
+        customer_name: String,
+        /// push to remote after sync
+        #[arg(long)]
+        push: bool,
+    },
+    /// list all customer branches
+    List,
 }
 
 #[derive(Debug, Clone, ValueEnum)]

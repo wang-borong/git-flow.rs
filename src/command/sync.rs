@@ -56,7 +56,14 @@ pub fn sync_repo_branches(target: SyncTarget, strategy: SyncStrategy) {
     };
 
     // -- sync branches --
-    sync_branches(&git, &repo, &target, &strategy, &local_branches, &remote_branches);
+    sync_branches(
+        &git,
+        &repo,
+        &target,
+        &strategy,
+        &local_branches,
+        &remote_branches,
+    );
 }
 
 fn select_repo(git: &Git) -> Result<String> {

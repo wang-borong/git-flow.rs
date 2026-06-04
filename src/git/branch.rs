@@ -43,10 +43,7 @@ impl Git {
     ) -> Result<()> {
         let repo = self.repo.borrow();
         let mut remote = repo.find_remote(repo_name)?;
-        let refspec = format!(
-            "refs/heads/{}:refs/heads/{}",
-            local_branch, remote_branch
-        );
+        let refspec = format!("refs/heads/{}:refs/heads/{}", local_branch, remote_branch);
         remote.push(
             &[&refspec],
             Some(PushOptions::new().remote_callbacks(network_callbacks())),
@@ -55,13 +52,15 @@ impl Git {
     }
 
     /// Push a local branch to a remote.
-    pub fn push_branch(&self, remote_name: &str, local_branch: &str, remote_branch: &str) -> Result<()> {
+    pub fn push_branch(
+        &self,
+        remote_name: &str,
+        local_branch: &str,
+        remote_branch: &str,
+    ) -> Result<()> {
         let repo = self.repo.borrow();
         let mut remote = repo.find_remote(remote_name)?;
-        let refspec = format!(
-            "refs/heads/{}:refs/heads/{}",
-            local_branch, remote_branch
-        );
+        let refspec = format!("refs/heads/{}:refs/heads/{}", local_branch, remote_branch);
         remote.push(
             &[&refspec],
             Some(PushOptions::new().remote_callbacks(network_callbacks())),

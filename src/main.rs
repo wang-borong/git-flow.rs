@@ -1,5 +1,5 @@
-use clap::Parser;
 use clap::CommandFactory;
+use clap::Parser;
 use cli::{Args, Command};
 use echo::Echo;
 use utils::{env_valid, get_branch_type_name};
@@ -9,6 +9,7 @@ mod command;
 mod config;
 mod echo;
 mod git;
+mod rules;
 mod utils;
 
 #[tokio::main]
@@ -26,6 +27,51 @@ async fn main() {
         Command::Init => command::init::init_config(),
         Command::Continue => command::continue_cmd::continue_operation(),
         Command::Abort => command::abort_cmd::abort_operation(),
+        Command::Customer { action } => {
+            if !env_valid() {
+                return;
+            }
+
+            let (main_branch, customer_prefix, remote) =
+                read_yqm_branch_config(args.config.clone());
+            let remote_ref = remote.as_deref();
+
+            match action {
+                cli::CustomerAction::Create {
+                    customer_name,
+                    push,
+                } => {
+                    command::customer::create_customer(
+                        customer_name,
+                        &main_branch,
+                        if *push { remote_ref } else { None },
+                    );
+                }
+                cli::CustomerAction::Sync {
+                    customer_name,
+                    push,
+                } => {
+                    if customer_name == "all" {
+                        command::customer::sync_all_customers(
+                            &main_branch,
+                            *push,
+                            remote_ref,
+                            &customer_prefix,
+                        );
+                    } else {
+                        command::customer::sync_customer(
+                            customer_name,
+                            &main_branch,
+                            *push,
+                            remote_ref,
+                        );
+                    }
+                }
+                cli::CustomerAction::List => {
+                    command::customer::list_customers(&main_branch, &customer_prefix);
+                }
+            }
+        }
 
         // -- commands that require env_valid --
         Command::Sync { target, strategy } => {
@@ -42,6 +88,7 @@ async fn main() {
             branch_name,
             branch_type,
             fetch,
+            customer,
         } => {
             if !env_valid() {
                 return;
@@ -49,7 +96,16 @@ async fn main() {
 
             match get_branch_type_name(branch_name.clone(), branch_type.clone(), args.config) {
                 Err(err) => Echo::error(err.to_string()),
-                Ok((branch_name, branch_type)) => {
+                Ok((branch_name, mut branch_type)) => {
+                    // Override from/to if --customer is specified
+                    if let Some(customer_name) = customer {
+                        let customer_branch = format!("customer/{}", customer_name);
+                        branch_type.from = customer_branch.clone();
+                        // Override target to customer branch
+                        for to in &mut branch_type.to {
+                            to.name = customer_branch.clone();
+                        }
+                    }
                     command::start::start_task(branch_name, branch_type, *fetch);
                 }
             }
@@ -62,6 +118,7 @@ async fn main() {
             squash,
             push,
             fetch,
+            customer,
         } => {
             if !env_valid() {
                 return;
@@ -69,7 +126,15 @@ async fn main() {
 
             match get_branch_type_name(branch_name.clone(), branch_type.clone(), args.config) {
                 Err(err) => Echo::error(err.to_string()),
-                Ok((branch_name, branch_type)) => {
+                Ok((branch_name, mut branch_type)) => {
+                    // Override from/to if --customer is specified
+                    if let Some(customer_name) = customer {
+                        let customer_branch = format!("customer/{}", customer_name);
+                        branch_type.from = customer_branch.clone();
+                        for to in &mut branch_type.to {
+                            to.name = customer_branch.clone();
+                        }
+                    }
                     let opts = command::finish::FinishOptions {
                         keep: *keep,
                         tag: *tag,
@@ -163,5 +228,43 @@ async fn main() {
                 }
             }
         }
+    }
+}
+
+/// Read yqm config to extract main branch name, customer prefix, and remote.
+/// Falls back to defaults if not a yqm config.
+fn read_yqm_branch_config(
+    config_path: Option<std::path::PathBuf>,
+) -> (String, String, Option<String>) {
+    let default_main = "main".to_string();
+    let default_prefix = "customer/".to_string();
+
+    // Try to find and read the config file
+    let config_text = if let Some(path) = config_path {
+        std::fs::read_to_string(path).ok()
+    } else {
+        // Try local then global config
+        let paths = config::path::get_config_path_list().unwrap_or_default();
+        paths.iter().find_map(|p| std::fs::read_to_string(p).ok())
+    };
+
+    let text = match config_text {
+        Some(t) => t,
+        None => return (default_main, default_prefix, None),
+    };
+
+    if !config::yqm::is_yqm_format(&text) {
+        return (default_main, default_prefix, None);
+    }
+
+    match toml::from_str::<config::yqm::YqmConfig>(&text) {
+        Ok(yqm) => {
+            let remote = yqm.hooks.post_start.as_ref().map(|_| {
+                // Try to detect remote from the config
+                "origin".to_string()
+            });
+            (yqm.branches.main, yqm.branches.customer.prefix, remote)
+        }
+        Err(_) => (default_main, default_prefix, None),
     }
 }

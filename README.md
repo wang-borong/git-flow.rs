@@ -1,10 +1,12 @@
 # git-flow.rs
 
-Extensible git flow written in rust.
+Extensible git flow written in Rust.
 
 **Extensible:** Customize the workflow that suits your preferences.
 
-**Follow configuration:** Standardize team protocols.
+**Config-driven:** Standardize team protocols with TOML configuration.
+
+**Customer branches:** Built-in support for multi-customer customization workflows.
 
 ## Installation
 
@@ -12,103 +14,202 @@ Extensible git flow written in rust.
 cargo install git-flow-rs
 ```
 
-Or download released binary.
+Or download from [GitHub Releases](https://github.com/niuiic/git-flow.rs/releases).
 
-## Usage
+## Quick Start
 
-`git flow --help`
+```sh
+# Initialize config interactively
+git flow init
 
-> Make sure that git command has been installed.
+# Start a feature
+git flow start my-feature feature
+# or: git flow start feature/my-feature
+
+# Finish the feature (squash merge to main, delete branch)
+git flow finish feature/my-feature
+```
+
+## Commands
 
 ```
 Usage: git-flow [OPTIONS] <COMMAND>
 
 Commands:
-  start   start a task
-  finish  finish a task
-  drop    drop a task
-  track   track a task
-  sync    sync branches
-  list    list avaliable branch types
-  check   check config
-  help    Print this message or the help of the given subcommand(s)
+  start      start a task
+  finish     finish a task
+  drop       drop a task
+  track      track a task
+  sync       sync branches between local/remote
+  list       list available branch types
+  check      validate a config file
+  complete   generate shell completion (bash/zsh/fish/elvish/powershell)
+  init       initialize git-flow config interactively
+  publish    publish current branch to remote
+  rebase     rebase current branch onto its source branch
+  continue   continue after resolving conflicts
+  abort      abort current operation and restore previous state
+  customer   manage customer branches (create/sync/list)
 
 Options:
-  -c, --config <FILE>
-  -h, --help           Print help
-  -V, --version        Print version
+  -c, --config <FILE>  path to config file
+      --dry-run        show what would be done without executing
+      --verbose        show detailed git operations
+  -h, --help           print help
+  -V, --version        print version
 ```
 
-A small example.
+### start
 
 ```sh
-# start a feature
-git flow start something feature
-# or git flow start feature/something
-# then branch feature/something created from dev
+# Start from a configured branch type
+git flow start my-feature feature
 
-# implement the feature
-# commit changes
+# Fetch source branch before creating
+git flow start my-feature feature --fetch
 
-# finish the feature
-git flow finish feature/something
-# then feature/something merged into dev and this branch deleted
+# Start from a customer branch
+git flow start my-fix hotfix --customer aliyun
 ```
 
-## Config
+### finish
 
-Global config file should be located at `~/.config/git-flow/config.toml`(or `C:\Users\YourUsername\AppData\Roaming\git-flow\config.toml` on windows).
+```sh
+# Standard finish (merge to configured targets, delete branch)
+git flow finish feature/my-feature
 
-Local config file should be located at `<GitRoot>/.git-flow.toml`.
+# Keep branch after finish
+git flow finish feature/my-feature --keep
 
-There is no default configuration. Here is an example.
+# Create a tag after finish
+git flow finish release/v1.0.0 --tag
 
-> Avaliable strategy: `merge`, `rebase`, `cherry-pick`.
+# Squash merge (override configured strategy)
+git flow finish feature/my-feature --squash
 
-> Avaliable hook: `before_start`, `after_start`, `before_finish`, `after_finish`, `before_drop`, `after_drop`.
+# Push target branches to remote
+git flow finish feature/my-feature --push
 
-> Regex is avaliable on `to.n.name`.
+# Fetch before finish
+git flow finish feature/my-feature --fetch
+
+# Finish to a customer branch instead of main
+git flow finish feature/my-feature --customer aliyun
+```
+
+### customer
+
+```sh
+# Create a customer branch from main
+git flow customer create aliyun
+
+# Create and push to remote
+git flow customer create aliyun --push
+
+# Sync main changes into a customer branch
+git flow customer sync aliyun
+
+# Sync and push
+git flow customer sync aliyun --push
+
+# Sync all customer branches
+git flow customer sync all
+
+# List all customer branches with their status
+git flow customer list
+```
+
+### Shell Completion
+
+```sh
+# Generate completion script
+git flow complete bash >> ~/.bashrc
+git flow complete zsh >> ~/.zshrc
+git flow complete fish > ~/.config/fish/completions/git-flow.fish
+```
+
+## Configuration
+
+Config file locations (in priority order):
+
+1. Explicit path: `git flow -c /path/to/config.toml <command>`
+2. Local: `<GitRoot>/.git-flow.toml`
+3. Global: `~/.config/git-flow/config.toml` (Linux/macOS) or `%APPDATA%/git-flow/config.toml` (Windows)
+
+### New Format (yqm)
+
+The new `[branches]`/`[commands]`/`[merge]`/`[hooks]` format supports customer branches and the yqm workflow.
+
+```toml
+[branches]
+main = "main"
+customer = { prefix = "customer/" }
+generalize = { prefix = "generalize/" }
+release = { prefix = "release/" }  # optional, omit for cloud repos
+
+[commands]
+disable = []  # e.g. ["release"] for cloud repos
+
+[merge]
+default_strategy = "squash"           # feature/hotfix → main
+release_strategy = "merge"            # release → main
+customer_sync_strategy = "merge"      # main → customer
+
+[hooks]
+post_start = "git push origin {BRANCH}:{BRANCH}"
+post_finish = "ci/deploy.sh"
+post_tag = "ci/archive.sh {TAG}"
+post_customer_sync = "ci/sync-customer.sh {CUSTOMER}"
+```
+
+### Legacy Format
+
+The original `[[branch_types]]` format is fully supported.
 
 ```toml
 [[branch_types]]
 name = "feature"
 create = "feature/{NAME}"
-from = "dev"
-to = [{ name = "dev", strategy = "merge" }]
-after_start = { command = "git", args = [
-  "push",
-  "origin",
-  "feature/{NAME}:feature/{NAME}",
-] }
-after_finish = { command = "git", args = [
-  "push",
-  "origin",
-  "--delete",
-  "feature/{NAME}",
-] }
-
-[[branch_types]]
-name = "hotfix"
-create = "hotfix/{NAME}"
 from = "main"
-to = [
-  { name = "main", strategy = "merge" },
-  { name = "dev", strategy = "merge" },
-  { name = "feature/*", strategy = "merge" },
-]
-
-[[branch_types]]
-name = "bugfix"
-create = "bugfix/{NAME}"
-from = "dev"
-to = [
-  { name = "dev", strategy = "merge" },
-  { name = "feature/*", strategy = "merge" },
-]
+to = [{ name = "main", strategy = "squash" }]
+remote = "origin"
 
 [[branch_types]]
 name = "release"
 create = "release/{NAME}"
-from = "dev"
-to = [{ name = "main", strategy = "merge" }]
+from = "main"
+to = [{ name = "main", strategy = "merge", tag = true }]
+tag_pattern = "v{NAME}"
 ```
+
+### Available Strategies
+
+| Strategy | Description |
+|---|---|
+| `merge` | Standard git merge |
+| `rebase` | Rebase onto target branch |
+| `cherry-pick` | Cherry-pick individual commits |
+| `squash` | Squash merge (single commit) |
+
+### Available Hooks
+
+| Hook | When |
+|---|---|
+| `before_start` / `after_start` | Before/after branch creation |
+| `before_finish` / `after_finish` | Before/after merge and deletion |
+| `before_drop` / `after_drop` | Before/after branch drop |
+| `before_publish` / `after_publish` | Before/after push to remote |
+| `before_rebase` / `after_rebase` | Before/after rebase operation |
+
+### Safety Rules
+
+When using the yqm config format, the following rules are enforced:
+
+- Only `feature/*`, `hotfix/*`, `generalize/*`, `release/*` can merge to `main`
+- `feature/customer-*` and `hotfix/customer-*` are blocked from merging to `main`
+- `customer/*` long-lived branches cannot merge directly to `main`
+- Release branches must use `merge` strategy (not `squash`)
+
+## License
+
+MIT

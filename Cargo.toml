@@ -1,14 +1,14 @@
 [package]
 name = "git-flow-rs"
-version = "0.4.3"
+version = "0.5"
 edition = "2021"
-authors = ["niuiic <niuiicde@gmail.com>"]
+authors = ["Jason Wang <wleovm@gmail.com>"]
 keywords = ["git", "gitflow"]
 license = "MIT"
-homepage = "https://github.com/niuiic/git-flow.rs"
-repository = "https://github.com/niuiic/git-flow.rs"
+homepage = "https://github.com/wang-borong/git-flow.rs"
+repository = "https://github.com/wang-borong/git-flow.rs"
 categories = ["command-line-utilities"]
-description = "Extensible git flow written in rust."
+description = "Extensible git flow written in rust for product developpment"
 
 [[bin]]
 name = "git-flow"

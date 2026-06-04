@@ -5,6 +5,7 @@ use crate::{
     config::definition::{BranchType, Strategy, TargetBranch},
     echo::Echo,
     git::Git,
+    rules::{validate_merge_allowed, validate_strategy},
     utils::run_hook,
 };
 
@@ -91,7 +92,7 @@ pub fn finish_task(branch_name: String, branch_type: BranchType, opts: FinishOpt
     });
 
     // -- resolve target branches --
-    if resolve_target_branches(&git, &branch_name, &target_branches).is_err() {
+    if resolve_target_branches(&git, &branch_name, &target_branches, &branch_type).is_err() {
         return;
     }
 
@@ -127,8 +128,24 @@ fn resolve_target_branches(
     git: &Git,
     branch_name: &str,
     target_branches: &Vec<TargetBranch>,
+    branch_type: &BranchType,
 ) -> Result<()> {
+    // Infer main branch: for feature/hotfix types, the `from` field is typically "main"
+    let main_branch = infer_main_branch(branch_type);
+
     for x in target_branches.iter() {
+        // Safety: check if merge is allowed
+        if let Some(ref main) = main_branch {
+            if let Err(err) = validate_merge_allowed(branch_name, &x.name, main) {
+                Echo::error(err.to_string());
+                bail!("");
+            }
+            if let Err(err) = validate_strategy(branch_name, &x.name, &x.strategy, main) {
+                Echo::error(err.to_string());
+                bail!("");
+            }
+        }
+
         match x.strategy {
             Strategy::Merge => {
                 merge(git, branch_name, &x.name)?;
@@ -145,6 +162,15 @@ fn resolve_target_branches(
         }
     }
     Ok(())
+}
+
+/// Infer the main branch name from the branch type configuration.
+/// For feature/hotfix/generalize types, `from` is typically "main".
+fn infer_main_branch(branch_type: &BranchType) -> Option<String> {
+    match branch_type.name.as_str() {
+        "feature" | "hotfix" | "release" | "generalize" => Some(branch_type.from.clone()),
+        _ => None, // Customer-specific types don't need safety checks
+    }
 }
 
 fn merge(git: &Git, source_branch: &str, target_branch: &str) -> Result<()> {
@@ -232,7 +258,10 @@ fn cherry_pick(git: &Git, source_branch: &str, target_branch: &str) -> Result<()
 }
 
 fn squash_merge(git: &Git, source_branch: &str, target_branch: &str) -> Result<()> {
-    let finish = Echo::progress(format!("squash merge {} into {}", source_branch, target_branch));
+    let finish = Echo::progress(format!(
+        "squash merge {} into {}",
+        source_branch, target_branch
+    ));
 
     let result = git.switch(target_branch);
     if let Err(err) = result {

@@ -19,8 +19,10 @@ fn interactive_init() -> Result<PathBuf> {
     println!("Select a template:");
     println!("[1] Standard gitflow (feature/release/hotfix from dev)");
     println!("[2] GitHub flow (feature from main)");
-    println!("[3] Custom (build from scratch)");
-    print!("Choice (1-3): ");
+    println!("[3] yqm Cloud (customer branches, no release)");
+    println!("[4] yqm Embedded (customer branches, with release)");
+    println!("[5] Custom (build from scratch)");
+    print!("Choice (1-5): ");
     io::stdout().flush()?;
 
     let mut input = String::new();
@@ -30,7 +32,9 @@ fn interactive_init() -> Result<PathBuf> {
     let toml_content = match choice {
         "1" => standard_template(),
         "2" => github_flow_template(),
-        "3" => custom_template()?,
+        "3" => yqm_cloud_template(),
+        "4" => yqm_embedded_template(),
+        "5" => custom_template()?,
         _ => bail!("invalid choice"),
     };
 
@@ -114,6 +118,57 @@ create = "feature/{NAME}"
 from = "main"
 to = [{ name = "main", strategy = "merge" }]
 remote = "origin"
+"#
+    .to_string()
+}
+
+fn yqm_cloud_template() -> String {
+    r#"# yqm Cloud Platform Config
+# Customer branches with squash merge, no release flow
+
+[branches]
+main = "main"
+customer = { prefix = "customer/" }
+generalize = { prefix = "generalize/" }
+
+[commands]
+disable = ["release"]
+
+[merge]
+default_strategy = "squash"
+customer_sync_strategy = "merge"
+
+[hooks]
+# post_start = "git push origin {BRANCH}:{BRANCH}"
+# post_finish = "ci/deploy-cloud-general.sh"
+# post_customer_sync = "ci/deploy-cloud-customer.sh {CUSTOMER}"
+"#
+    .to_string()
+}
+
+fn yqm_embedded_template() -> String {
+    r#"# yqm Embedded Product Config
+# Customer branches with squash merge, release flow for version control
+
+[branches]
+main = "main"
+customer = { prefix = "customer/" }
+generalize = { prefix = "generalize/" }
+release = { prefix = "release/" }
+
+[commands]
+disable = []
+
+[merge]
+default_strategy = "squash"
+release_strategy = "merge"
+customer_sync_strategy = "merge"
+
+[hooks]
+# post_start = "git push origin {BRANCH}:{BRANCH}"
+# post_finish = "ci/build-embedded-general.sh"
+# post_tag = "ci/archive-firmware.sh {TAG}"
+# post_customer_sync = "ci/build-embedded-customer.sh {CUSTOMER}"
 "#
     .to_string()
 }

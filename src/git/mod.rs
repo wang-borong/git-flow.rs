@@ -127,7 +127,12 @@ impl Git {
         let ancestor_tree = ancestor_commit.tree()?;
 
         let mut merge_opts = git2::MergeOptions::new();
-        let mut index = repo.merge_trees(&ancestor_tree, &head_tree, &source_tree, Some(&mut merge_opts))?;
+        let mut index = repo.merge_trees(
+            &ancestor_tree,
+            &head_tree,
+            &source_tree,
+            Some(&mut merge_opts),
+        )?;
 
         if index.has_conflicts() {
             bail!("squash merge conflict detected, resolve manually");
@@ -227,10 +232,7 @@ impl Git {
     pub fn current_branch(&self) -> Result<String> {
         let repo = self.repo.borrow();
         let head = repo.head()?;
-        let name = head
-            .shorthand()
-            .unwrap_or("HEAD")
-            .to_string();
+        let name = head.shorthand().unwrap_or("HEAD").to_string();
         Ok(name)
     }
 }
@@ -240,9 +242,7 @@ impl Git {
     /// Check if there are uncommitted changes in the working directory.
     pub fn has_uncommitted_changes(&self) -> Result<bool> {
         let repo = self.repo.borrow();
-        let statuses = repo.statuses(Some(
-            git2::StatusOptions::new().include_untracked(true),
-        ))?;
+        let statuses = repo.statuses(Some(git2::StatusOptions::new().include_untracked(true)))?;
         Ok(!statuses.is_empty())
     }
 
@@ -334,7 +334,14 @@ impl Git {
         let merge_commit = repo.find_commit(merge_head_oid)?;
 
         let msg = format!("Merge branch '{}'", merge_commit.id());
-        repo.commit(Some("HEAD"), &sig, &sig, &msg, &tree, &[&head_commit, &merge_commit])?;
+        repo.commit(
+            Some("HEAD"),
+            &sig,
+            &sig,
+            &msg,
+            &tree,
+            &[&head_commit, &merge_commit],
+        )?;
         repo.cleanup_state()?;
         Ok(())
     }

@@ -1,6 +1,7 @@
 pub mod abort_cmd;
 pub mod check;
 pub mod continue_cmd;
+pub mod customer;
 pub mod drop;
 pub mod finish;
 pub mod init;
