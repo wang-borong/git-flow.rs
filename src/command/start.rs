@@ -1,6 +1,11 @@
 use crate::{config::definition::BranchType, echo::Echo, git::Git, utils::run_hook};
 
-pub fn start_task(branch_name: String, branch_type: BranchType, fetch: bool) {
+pub fn start_task(
+    branch_name: String,
+    branch_type: BranchType,
+    fetch: bool,
+    pick_commits: Option<Vec<String>>,
+) {
     let git = match Git::open() {
         Err(err) => {
             Echo::error(err.to_string());
@@ -69,6 +74,19 @@ pub fn start_task(branch_name: String, branch_type: BranchType, fetch: bool) {
             return;
         }
         Ok(_) => finish(true, &format!("switch to new branch {}", &branch_name)),
+    }
+
+    // -- cherry pick commits if specified --
+    if let Some(commits) = pick_commits {
+        let msg = format!("cherry-pick commits {:?}", commits);
+        let finish = Echo::progress(&msg);
+        match git.cherry_pick(commits) {
+            Err(err) => {
+                finish(false, &err.to_string());
+                return;
+            }
+            Ok(_) => finish(true, &msg),
+        }
     }
 
     // -- run after start hook --

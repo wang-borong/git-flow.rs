@@ -5,6 +5,7 @@ pub struct Config {
     pub branch_types: Vec<BranchType>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize, Clone)]
 pub struct BranchType {
     pub name: String,

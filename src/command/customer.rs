@@ -113,7 +113,7 @@ pub fn sync_customer(customer_name: &str, main_branch: &str, push: bool, remote:
 
     // -- merge main into customer --
     let finish = Echo::progress(format!("merge {} into {}", main_branch, customer_branch));
-    match git.merge(main_branch) {
+    match git.merge(main_branch, None) {
         Err(err) => {
             finish(false, &err.to_string());
             Echo::info("resolve conflicts, then run `gitflow continue`");
@@ -208,7 +208,7 @@ pub fn sync_all_customers(
         }
 
         // -- merge main --
-        match git.merge(main_branch) {
+        match git.merge(main_branch, None) {
             Err(err) => {
                 // Abort the failed merge
                 let _ = git.merge_abort();

@@ -39,7 +39,7 @@ impl Git {
 
 // # combine
 impl Git {
-    pub fn merge(&self, source_branch: &str) -> Result<()> {
+    pub fn merge(&self, source_branch: &str, custom_msg: Option<&str>) -> Result<()> {
         let repo = self.repo.borrow();
         let source_ref = repo.find_branch(source_branch, git2::BranchType::Local)?;
         let source_oid = source_ref.get().target().unwrap();
@@ -61,11 +61,14 @@ impl Git {
         let head_commit = repo.head()?.peel_to_commit()?;
         let source_commit = repo.find_commit(source_oid)?;
         let tree = repo.find_tree(repo.index()?.write_tree()?)?;
+        let msg = custom_msg
+            .map(|m| m.to_string())
+            .unwrap_or_else(|| format!("Merge branch '{}'", source_branch));
         repo.commit(
             Some("HEAD"),
             &sig,
             &sig,
-            &format!("Merge branch '{}'", source_branch),
+            &msg,
             &tree,
             &[&head_commit, &source_commit],
         )?;
@@ -76,50 +79,49 @@ impl Git {
 
     pub fn rebase(&self, base_branch: &str) -> Result<()> {
         let repo = self.repo.borrow();
-        let base_ref = repo.find_branch(base_branch, git2::BranchType::Local)?;
-        let base_oid = base_ref.get().target().unwrap();
-        let base_annotated = repo.find_annotated_commit(base_oid)?;
-
-        let head_ref = repo.head()?;
-        let head_oid = head_ref.target().unwrap();
-        let head_annotated = repo.find_annotated_commit(head_oid)?;
-
-        let mut rebase = repo.rebase(Some(&head_annotated), Some(&base_annotated), None, None)?;
-
-        let sig = repo.signature()?;
-        while let Some(op) = rebase.next() {
-            let _op = op?;
-            rebase.commit(None, &sig, None)?;
+        let workdir = repo
+            .workdir()
+            .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
+        let status = std::process::Command::new("git")
+            .arg("rebase")
+            .arg(base_branch)
+            .current_dir(workdir)
+            .status()?;
+        if !status.success() {
+            let index = repo.index()?;
+            if index.has_conflicts() {
+                bail!("rebase conflict detected, resolve manually");
+            } else {
+                bail!("rebase failed");
+            }
         }
-        rebase.finish(Some(&sig))?;
         Ok(())
     }
 
     pub fn cherry_pick(&self, commits: Vec<String>) -> Result<()> {
         let repo = self.repo.borrow();
-        for commit_id in &commits {
-            let oid = git2::Oid::from_str(commit_id)?;
-            let commit = repo.find_commit(oid)?;
-            repo.cherrypick(&commit, None)?;
-
+        let workdir = repo
+            .workdir()
+            .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
+        let status = std::process::Command::new("git")
+            .arg("cherry-pick")
+            .args(&commits)
+            .current_dir(workdir)
+            .status()?;
+        if !status.success() {
             let index = repo.index()?;
             if index.has_conflicts() {
-                bail!("cherry-pick conflict detected on commit {}", commit_id);
+                bail!("cherry-pick conflict detected, resolve manually");
+            } else {
+                bail!("cherry-pick failed");
             }
-
-            let sig = repo.signature()?;
-            let head_commit = repo.head()?.peel_to_commit()?;
-            let tree = repo.find_tree(repo.index()?.write_tree()?)?;
-            let msg = commit.message().unwrap_or("cherry-pick");
-            repo.commit(Some("HEAD"), &sig, &sig, msg, &tree, &[&head_commit])?;
-            repo.cleanup_state()?;
         }
         Ok(())
     }
 
     /// Squash merge: merge the source tree into the target without preserving
     /// individual commits. Creates a single commit with all changes.
-    pub fn squash_merge(&self, source_branch: &str) -> Result<()> {
+    pub fn squash_merge(&self, source_branch: &str, custom_msg: Option<&str>) -> Result<()> {
         let repo = self.repo.borrow();
         let source_ref = repo.find_branch(source_branch, git2::BranchType::Local)?;
         let source_oid = source_ref.get().target().unwrap();
@@ -143,14 +145,27 @@ impl Git {
 
         let result_tree = repo.find_tree(index.write_tree_to(&repo)?)?;
         let sig = repo.signature()?;
+        let msg = custom_msg
+            .map(|m| m.to_string())
+            .unwrap_or_else(|| format!("Squash merge branch '{}'", source_branch));
         repo.commit(
             Some("HEAD"),
             &sig,
             &sig,
-            &format!("Squash merge branch '{}'", source_branch),
+            &msg,
             &result_tree,
             &[&head_commit],
         )?;
+
+        // Update active index to the result tree
+        let mut repo_index = repo.index()?;
+        repo_index.read_tree(&result_tree)?;
+        repo_index.write()?;
+
+        // Checkout the result tree to update the worktree
+        let mut checkout_opts = CheckoutBuilder::new();
+        checkout_opts.force();
+        repo.checkout_head(Some(&mut checkout_opts))?;
 
         repo.cleanup_state()?;
         Ok(())
@@ -161,11 +176,21 @@ impl Git {
 impl Git {
     pub fn switch(&self, target_branch: &str) -> Result<()> {
         let repo = self.repo.borrow();
-        // Validate the branch exists before setting HEAD
-        repo.find_branch(target_branch, git2::BranchType::Local)?;
+        let branch = repo.find_branch(target_branch, git2::BranchType::Local)?;
+        let commit = branch.get().peel_to_commit()?;
+        let tree = commit.tree()?;
+
         let refname = format!("refs/heads/{}", target_branch);
         repo.set_head(&refname)?;
-        repo.checkout_head(Some(CheckoutBuilder::new().safe()))?;
+
+        let mut index = repo.index()?;
+        index.read_tree(&tree)?;
+        index.write()?;
+
+        let mut opts = CheckoutBuilder::new();
+        opts.safe();
+        repo.checkout_head(Some(&mut opts))?;
+
         Ok(())
     }
 
@@ -281,82 +306,106 @@ impl Git {
         repo.state() == git2::RepositoryState::Merge
     }
 
-    /// Continue a rebase after conflict resolution.
-    /// This finishes the rebase operation by creating commits for resolved changes.
-    pub fn rebase_continue(&self) -> Result<()> {
-        // If there are resolved changes, commit them first
+    /// Check if a cherry-pick is currently in progress.
+    pub fn is_cherrypick_in_progress(&self) -> bool {
         let repo = self.repo.borrow();
-        let mut index = repo.index()?;
-        if index.has_conflicts() {
-            bail!("conflicts still exist, resolve them first");
-        }
+        repo.state() == git2::RepositoryState::CherryPick
+            || repo.state() == git2::RepositoryState::CherryPickSequence
+    }
 
-        // Check if there are staged changes to commit
-        let head_tree = repo.head()?.peel_to_commit()?.tree()?;
-        let index_tree = repo.find_tree(index.write_tree_to(&repo)?)?;
-        if head_tree.id() != index_tree.id() {
-            let sig = repo.signature()?;
-            repo.commit(
-                Some("HEAD"),
-                &sig,
-                &sig,
-                "continue rebase",
-                &index_tree,
-                &[&repo.head()?.peel_to_commit()?],
-            )?;
+    /// Continue a rebase after conflict resolution.
+    pub fn rebase_continue(&self) -> Result<()> {
+        let repo = self.repo.borrow();
+        let workdir = repo
+            .workdir()
+            .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
+        let status = std::process::Command::new("git")
+            .args(["rebase", "--continue"])
+            .current_dir(workdir)
+            .status()?;
+        if !status.success() {
+            bail!("rebase continue failed");
         }
-
-        // Finish the rebase
-        // Note: After manual conflict resolution, the user should use
-        // `git rebase --continue` directly. This is a simplified version.
-        repo.cleanup_state()?;
         Ok(())
     }
 
     /// Abort a rebase in progress, returning to the pre-rebase state.
     pub fn rebase_abort(&self) -> Result<()> {
         let repo = self.repo.borrow();
-        repo.cleanup_state()?;
-        // Reset HEAD to the original branch
-        repo.checkout_head(Some(CheckoutBuilder::new().force()))?;
+        let workdir = repo
+            .workdir()
+            .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
+        let status = std::process::Command::new("git")
+            .args(["rebase", "--abort"])
+            .current_dir(workdir)
+            .status()?;
+        if !status.success() {
+            bail!("rebase abort failed");
+        }
         Ok(())
     }
 
     /// Continue a merge after conflict resolution.
     pub fn merge_continue(&self) -> Result<()> {
         let repo = self.repo.borrow();
-        let mut index = repo.index()?;
-        if index.has_conflicts() {
-            bail!("conflicts still exist, resolve them first");
+        let workdir = repo
+            .workdir()
+            .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
+        let status = std::process::Command::new("git")
+            .args(["merge", "--continue"])
+            .current_dir(workdir)
+            .status()?;
+        if !status.success() {
+            bail!("merge continue failed");
         }
-
-        let sig = repo.signature()?;
-        let head_commit = repo.head()?.peel_to_commit()?;
-        let tree = repo.find_tree(index.write_tree_to(&repo)?)?;
-
-        // Find the merge parents from MERGE_HEAD
-        let merge_head_ref = repo.find_reference("MERGE_HEAD")?;
-        let merge_head_oid = merge_head_ref.target().unwrap();
-        let merge_commit = repo.find_commit(merge_head_oid)?;
-
-        let msg = format!("Merge branch '{}'", merge_commit.id());
-        repo.commit(
-            Some("HEAD"),
-            &sig,
-            &sig,
-            &msg,
-            &tree,
-            &[&head_commit, &merge_commit],
-        )?;
-        repo.cleanup_state()?;
         Ok(())
     }
 
     /// Abort a merge in progress, returning to the pre-merge state.
     pub fn merge_abort(&self) -> Result<()> {
         let repo = self.repo.borrow();
-        repo.cleanup_state()?;
-        repo.checkout_head(Some(CheckoutBuilder::new().force()))?;
+        let workdir = repo
+            .workdir()
+            .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
+        let status = std::process::Command::new("git")
+            .args(["merge", "--abort"])
+            .current_dir(workdir)
+            .status()?;
+        if !status.success() {
+            bail!("merge abort failed");
+        }
+        Ok(())
+    }
+
+    /// Continue a cherry-pick after conflict resolution.
+    pub fn cherrypick_continue(&self) -> Result<()> {
+        let repo = self.repo.borrow();
+        let workdir = repo
+            .workdir()
+            .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
+        let status = std::process::Command::new("git")
+            .args(["cherry-pick", "--continue"])
+            .current_dir(workdir)
+            .status()?;
+        if !status.success() {
+            bail!("cherry-pick continue failed");
+        }
+        Ok(())
+    }
+
+    /// Abort a cherry-pick in progress, returning to the pre-cherry-pick state.
+    pub fn cherrypick_abort(&self) -> Result<()> {
+        let repo = self.repo.borrow();
+        let workdir = repo
+            .workdir()
+            .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
+        let status = std::process::Command::new("git")
+            .args(["cherry-pick", "--abort"])
+            .current_dir(workdir)
+            .status()?;
+        if !status.success() {
+            bail!("cherry-pick abort failed");
+        }
         Ok(())
     }
 }

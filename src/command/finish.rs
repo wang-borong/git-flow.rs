@@ -9,12 +9,20 @@ use crate::{
     utils::run_hook,
 };
 
+#[allow(dead_code)]
 pub struct FinishOptions {
     pub keep: bool,
-    pub tag: bool,
+    pub tag: Option<String>,
     pub squash: bool,
     pub push: bool,
     pub fetch: bool,
+    pub bump: Option<String>,
+    pub squash_message: Option<String>,
+    pub merge_message: Option<String>,
+    pub update_message: Option<String>,
+    pub no_verify: bool,
+    pub sign: bool,
+    pub customer: Option<String>,
 }
 
 pub fn finish_task(branch_name: String, branch_type: BranchType, opts: FinishOptions) {
@@ -59,13 +67,14 @@ pub fn finish_task(branch_name: String, branch_type: BranchType, opts: FinishOpt
         return;
     }
 
-    // -- run before finish hook --
-    if run_hook(
-        branch_type.before_finish.clone(),
-        &branch_name,
-        &branch_type,
-    )
-    .is_err()
+    // -- run before finish hook (skip if --no-verify is true) --
+    if !opts.no_verify
+        && run_hook(
+            branch_type.before_finish.clone(),
+            &branch_name,
+            &branch_type,
+        )
+        .is_err()
     {
         return;
     }
@@ -92,7 +101,7 @@ pub fn finish_task(branch_name: String, branch_type: BranchType, opts: FinishOpt
     });
 
     // -- resolve target branches --
-    if resolve_target_branches(&git, &branch_name, &target_branches, &branch_type).is_err() {
+    if resolve_target_branches(&git, &branch_name, &target_branches, &branch_type, &opts).is_err() {
         return;
     }
 
@@ -101,9 +110,9 @@ pub fn finish_task(branch_name: String, branch_type: BranchType, opts: FinishOpt
         push_target_branches(&git, &branch_type, &target_branches);
     }
 
-    // -- create tag if requested --
-    if opts.tag {
-        create_finish_tag(&git, &branch_name, &branch_type);
+    // -- create tag if requested or if --bump is specified --
+    if opts.tag.is_some() || opts.bump.is_some() {
+        create_finish_tag(&git, &branch_name, &branch_type, &opts);
     }
 
     // -- delete branch (unless --keep) --
@@ -121,7 +130,9 @@ pub fn finish_task(branch_name: String, branch_type: BranchType, opts: FinishOpt
     }
 
     // -- run after finish hook --
-    let _ = run_hook(branch_type.after_finish.clone(), &branch_name, &branch_type);
+    if !opts.no_verify {
+        let _ = run_hook(branch_type.after_finish.clone(), &branch_name, &branch_type);
+    }
 }
 
 fn resolve_target_branches(
@@ -129,6 +140,7 @@ fn resolve_target_branches(
     branch_name: &str,
     target_branches: &[TargetBranch],
     branch_type: &BranchType,
+    opts: &FinishOptions,
 ) -> Result<()> {
     // Infer main branch: for feature/hotfix types, the `from` field is typically "main"
     let main_branch = infer_main_branch(branch_type);
@@ -148,7 +160,7 @@ fn resolve_target_branches(
 
         match x.strategy {
             Strategy::Merge => {
-                merge(git, branch_name, &x.name)?;
+                merge(git, branch_name, &x.name, opts.merge_message.as_deref())?;
             }
             Strategy::Rebase => {
                 rebase(git, branch_name, &x.name)?;
@@ -157,7 +169,7 @@ fn resolve_target_branches(
                 cherry_pick(git, branch_name, &x.name)?;
             }
             Strategy::Squash => {
-                squash_merge(git, branch_name, &x.name)?;
+                squash_merge(git, branch_name, &x.name, opts.squash_message.as_deref())?;
             }
         }
     }
@@ -165,15 +177,28 @@ fn resolve_target_branches(
 }
 
 /// Infer the main branch name from the branch type configuration.
-/// For feature/hotfix/generalize types, `from` is typically "main".
+/// For feature/hotfix/generalize/general types, `from` is typically "main".
 fn infer_main_branch(branch_type: &BranchType) -> Option<String> {
     match branch_type.name.as_str() {
-        "feature" | "hotfix" | "release" | "generalize" => Some(branch_type.from.clone()),
+        "feature" | "hotfix" | "release" | "generalize" | "general" => {
+            Some(branch_type.from.clone())
+        }
         _ => None, // Customer-specific types don't need safety checks
     }
 }
 
-fn merge(git: &Git, source_branch: &str, target_branch: &str) -> Result<()> {
+fn format_commit_message(template: &str, source_branch: &str, target_branch: &str) -> String {
+    template
+        .replace("%b", source_branch)
+        .replace("%p", target_branch)
+}
+
+fn merge(
+    git: &Git,
+    source_branch: &str,
+    target_branch: &str,
+    custom_template: Option<&str>,
+) -> Result<()> {
     let finish = Echo::progress(format!("merge {} into {}", source_branch, target_branch));
 
     let result = git.switch(target_branch);
@@ -182,7 +207,9 @@ fn merge(git: &Git, source_branch: &str, target_branch: &str) -> Result<()> {
         bail!("");
     }
 
-    let result = git.merge(source_branch);
+    let custom_msg =
+        custom_template.map(|t| format_commit_message(t, source_branch, target_branch));
+    let result = git.merge(source_branch, custom_msg.as_deref());
     if let Err(err) = result {
         finish(false, &err.to_string());
         bail!("");
@@ -257,7 +284,12 @@ fn cherry_pick(git: &Git, source_branch: &str, target_branch: &str) -> Result<()
     Ok(())
 }
 
-fn squash_merge(git: &Git, source_branch: &str, target_branch: &str) -> Result<()> {
+fn squash_merge(
+    git: &Git,
+    source_branch: &str,
+    target_branch: &str,
+    custom_template: Option<&str>,
+) -> Result<()> {
     let finish = Echo::progress(format!(
         "squash merge {} into {}",
         source_branch, target_branch
@@ -269,7 +301,9 @@ fn squash_merge(git: &Git, source_branch: &str, target_branch: &str) -> Result<(
         bail!("");
     }
 
-    let result = git.squash_merge(source_branch);
+    let custom_msg =
+        custom_template.map(|t| format_commit_message(t, source_branch, target_branch));
+    let result = git.squash_merge(source_branch, custom_msg.as_deref());
     if let Err(err) = result {
         finish(false, &err.to_string());
         bail!("");
@@ -303,21 +337,31 @@ fn push_target_branches(git: &Git, branch_type: &BranchType, target_branches: &[
     }
 }
 
-fn create_finish_tag(git: &Git, branch_name: &str, branch_type: &BranchType) {
-    let tag_pattern = match &branch_type.tag_pattern {
-        Some(p) => p.clone(),
-        None => {
-            // Auto-generate tag name from branch name
+fn create_finish_tag(git: &Git, branch_name: &str, branch_type: &BranchType, opts: &FinishOptions) {
+    let tag_name = if let Some(ref bump_type) = opts.bump {
+        let customer_name = opts.customer.as_deref();
+        match crate::utils::find_latest_tag_and_bump(git, customer_name, bump_type) {
+            Ok(t) => t,
+            Err(err) => {
+                Echo::error(format!("Failed to auto bump version tag: {}", err));
+                return;
+            }
+        }
+    } else {
+        let custom_tag = opts.tag.as_deref().unwrap_or("");
+        if !custom_tag.is_empty() {
+            custom_tag.to_string()
+        } else {
             let prefix = format!("{}/", branch_type.name);
-            let tag_name = branch_name.strip_prefix(&prefix).unwrap_or(branch_name);
-            format!("v{}", tag_name)
+            let short_name = branch_name.strip_prefix(&prefix).unwrap_or(branch_name);
+            match &branch_type.tag_pattern {
+                Some(p) => p
+                    .replace("{NAME}", short_name)
+                    .replace("{{NAME}}", short_name),
+                None => short_name.to_string(),
+            }
         }
     };
-
-    // Replace {NAME} placeholder
-    let prefix = format!("{}/", branch_type.name);
-    let short_name = branch_name.strip_prefix(&prefix).unwrap_or(branch_name);
-    let tag_name = tag_pattern.replace("{NAME}", short_name);
 
     let finish = Echo::progress(format!("create tag {}", tag_name));
     match git.create_tag(&tag_name, &format!("Release {}", tag_name)) {

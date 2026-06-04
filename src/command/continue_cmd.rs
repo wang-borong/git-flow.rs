@@ -25,7 +25,15 @@ pub fn continue_operation() {
             }
             Ok(_) => finish(true, "merge continued"),
         }
+    } else if git.is_cherrypick_in_progress() {
+        let finish = Echo::progress("continue cherry-pick");
+        match git.cherrypick_continue() {
+            Err(err) => {
+                finish(false, &err.to_string());
+            }
+            Ok(_) => finish(true, "cherry-pick continued"),
+        }
     } else {
-        Echo::info("no rebase or merge in progress");
+        Echo::info("no rebase, merge or cherry-pick in progress");
     }
 }

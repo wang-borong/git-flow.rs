@@ -25,7 +25,15 @@ pub fn abort_operation() {
             }
             Ok(_) => finish(true, "merge aborted"),
         }
+    } else if git.is_cherrypick_in_progress() {
+        let finish = Echo::progress("abort cherry-pick");
+        match git.cherrypick_abort() {
+            Err(err) => {
+                finish(false, &err.to_string());
+            }
+            Ok(_) => finish(true, "cherry-pick aborted"),
+        }
     } else {
-        Echo::info("no rebase or merge in progress");
+        Echo::info("no rebase, merge or cherry-pick in progress");
     }
 }

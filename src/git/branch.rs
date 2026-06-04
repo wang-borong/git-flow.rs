@@ -135,4 +135,25 @@ impl Git {
         repo.tag(tag_name, head.as_object(), &sig, message, false)?;
         Ok(())
     }
+
+    /// Get all tags in the repository.
+    pub fn get_tags(&self) -> Result<Vec<String>> {
+        let repo = self.repo.borrow();
+        let tags = repo.tag_names(None)?;
+        let mut names = Vec::new();
+        for tag in tags.iter() {
+            if let Ok(Some(t)) = tag {
+                names.push(t.to_string());
+            }
+        }
+        Ok(names)
+    }
+
+    /// Rename a local branch.
+    pub fn rename_branch(&self, old_branch: &str, new_branch: &str) -> Result<()> {
+        let repo = self.repo.borrow();
+        let mut branch = repo.find_branch(old_branch, BranchType::Local)?;
+        branch.rename(new_branch, false)?;
+        Ok(())
+    }
 }

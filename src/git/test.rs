@@ -67,7 +67,7 @@ fn switch_t() {
 #[test]
 fn merge_t() {
     let (_td, git) = test_repo();
-    let result = git.merge("undefined");
+    let result = git.merge("undefined", None);
     assert!(result.is_err());
 }
 

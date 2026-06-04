@@ -10,7 +10,9 @@ use terminal_size::{terminal_size, Height as TerminalHeight, Width as TerminalWi
 use crate::{
     config::{definition::Command, read::read_config},
     echo::Echo,
+    git::Git,
 };
+use regex::Regex;
 
 #[derive(Tabled)]
 struct BranchType {
@@ -93,4 +95,93 @@ fn get_terminal_size() -> Result<(usize, usize)> {
     let (TerminalWidth(width), TerminalHeight(height)) = terminal_size().context("unable")?;
 
     Ok((width as usize, height as usize))
+}
+
+pub fn list_branches(type_name: &str, pattern: Option<String>, config_path: Option<PathBuf>) {
+    let git = match Git::open() {
+        Err(err) => {
+            Echo::error(err.to_string());
+            return;
+        }
+        Ok(git) => git,
+    };
+
+    let branches = match git.get_local_branches() {
+        Err(err) => {
+            Echo::error(err.to_string());
+            return;
+        }
+        Ok(b) => b,
+    };
+
+    let config = match read_config(config_path) {
+        Err(err) => {
+            Echo::error(err.to_string());
+            return;
+        }
+        Ok(c) => c,
+    };
+
+    let target_types: Vec<&crate::config::definition::BranchType> = config
+        .branch_types
+        .iter()
+        .filter(|b| b.name == type_name || b.name == format!("customer-{}", type_name))
+        .collect();
+
+    if target_types.is_empty() {
+        Echo::warning(format!(
+            "No configured prefix found for branch type '{}'",
+            type_name
+        ));
+        return;
+    }
+
+    let mut matching_branches = Vec::new();
+
+    for branch in &branches {
+        for bt in &target_types {
+            let mut pattern_str = bt.create.clone();
+            pattern_str = pattern_str.replace("{{NAME}}", "([^/]+)");
+            pattern_str = pattern_str.replace("{NAME}", "([^/]+)");
+            pattern_str = pattern_str.replace("{{CUSTOMER}}", "([^/]+)");
+            pattern_str = pattern_str.replace("{CUSTOMER}", "([^/]+)");
+            pattern_str = pattern_str.replace("{{FEATURE}}", "(.*)");
+            pattern_str = pattern_str.replace("{{FIX}}", "(.*)");
+
+            let re = Regex::new(&format!("^{}$", pattern_str)).unwrap();
+            if let Some(caps) = re.captures(branch) {
+                if let Some(short_name_cap) = caps.iter().last().flatten() {
+                    let short_name = short_name_cap.as_str();
+
+                    let is_match = match &pattern {
+                        Some(p) => {
+                            let wildcard_pattern =
+                                format!("^{}$", p.replace("*", ".*").replace("?", "."));
+                            if let Ok(re_p) = Regex::new(&wildcard_pattern) {
+                                re_p.is_match(short_name)
+                            } else {
+                                false
+                            }
+                        }
+                        None => true,
+                    };
+
+                    if is_match {
+                        matching_branches.push(branch.clone());
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    if matching_branches.is_empty() {
+        Echo::info("No matching branches found");
+    } else {
+        println!("\nLocal {} branches:", type_name);
+        for b in matching_branches {
+            println!("  {}", b);
+        }
+        println!();
+    }
 }

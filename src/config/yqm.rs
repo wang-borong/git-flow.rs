@@ -19,6 +19,7 @@ pub struct YqmConfig {
 pub struct BranchesConfig {
     pub main: String,
     pub customer: PrefixConfig,
+    #[serde(alias = "general")]
     pub generalize: PrefixConfig,
     /// release is optional (cloud repos don't need it)
     pub release: Option<PrefixConfig>,
@@ -91,12 +92,15 @@ pub fn parse_yqm_config(toml_content: &str) -> Result<Config> {
 
     let main = &yqm.branches.main;
     let customer_prefix = &yqm.branches.customer.prefix;
-    let _generalize_prefix = &yqm.branches.generalize.prefix;
+    let generalize_prefix = &yqm.branches.generalize.prefix;
 
     let default_strategy = parse_strategy(&yqm.merge.default_strategy)?;
     let release_strategy = parse_strategy(&yqm.merge.release_strategy)?;
 
-    let is_disabled = |name: &str| yqm.commands.disable.iter().any(|d| d == name);
+    let is_disabled = |name: &str| {
+        yqm.commands.disable.iter().any(|d| d == name)
+            || (name == "general" && yqm.commands.disable.iter().any(|d| d == "generalize"))
+    };
 
     // -- feature (from main, squash→main) --
     if !is_disabled("feature") {
@@ -202,11 +206,14 @@ pub fn parse_yqm_config(toml_content: &str) -> Result<Config> {
         after_rebase: None,
     });
 
-    // -- generalize (from customer/x, squash→main) --
-    if !is_disabled("generalize") {
+    // -- general (from customer/x, squash→main) --
+    if !is_disabled("general") {
         branch_types.push(BranchType {
-            name: "generalize".to_string(),
-            create: "feature/{NAME}".to_string(),
+            name: "general".to_string(),
+            create: format!(
+                "{}customer-{{{{CUSTOMER}}}}/{{{{NAME}}}}",
+                generalize_prefix
+            ),
             from: format!("{}{{CUSTOMER}}", customer_prefix),
             to: vec![TargetBranch {
                 name: main.clone(),
@@ -312,7 +319,7 @@ customer_sync_strategy = "merge"
             .branch_types
             .iter()
             .any(|b| b.name == "customer-hotfix"));
-        assert!(config.branch_types.iter().any(|b| b.name == "generalize"));
+        assert!(config.branch_types.iter().any(|b| b.name == "general"));
         assert!(!config.branch_types.iter().any(|b| b.name == "release"));
         assert!(!config
             .branch_types
