@@ -13,7 +13,11 @@ fn test_repo() -> (TempDir, Git) {
         .current_dir(path)
         .output()
         .unwrap();
-    assert!(output.status.success(), "git init failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "git init failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     std::process::Command::new("git")
         .args(["config", "user.name", "test"])
@@ -25,14 +29,18 @@ fn test_repo() -> (TempDir, Git) {
         .current_dir(path)
         .output()
         .unwrap();
-    
+
     // Config default initial branch if needed, but since we commit first:
     let output = std::process::Command::new("git")
         .args(["commit", "--allow-empty", "-m", "init"])
         .current_dir(path)
         .output()
         .unwrap();
-    assert!(output.status.success(), "git commit failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "git commit failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     // Rename active branch to main for consistency
     let _ = std::process::Command::new("git")
@@ -110,7 +118,135 @@ fn switch_ahead_commits_t() {
     git.switch("branch1").unwrap();
 
     // 4. Verify that the file a.txt is removed from the working directory
-    assert!(!file_path.exists(), "a.txt should be removed from the working directory after switching to branch1");
+    assert!(
+        !file_path.exists(),
+        "a.txt should be removed from the working directory after switching to branch1"
+    );
+
+    // 5. Verify that git status is clean (the index file on disk was successfully updated)
+    let status_output = std::process::Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(path)
+        .output()
+        .unwrap();
+    let status_str = String::from_utf8_lossy(&status_output.stdout);
+    assert!(
+        status_str.trim().is_empty(),
+        "git status should be clean, but got:\n{}",
+        status_str
+    );
+}
+
+#[test]
+fn switch_and_cherry_pick_conflict_t() {
+    let (td, git) = test_repo();
+    let path = td.path();
+
+    // 1. Create a.txt with "heelo" and commit on main
+    let a_path = path.join("a.txt");
+    std::fs::write(&a_path, "heelo\n").unwrap();
+    assert!(std::process::Command::new("git")
+        .args(["add", "a.txt"])
+        .current_dir(path)
+        .status()
+        .unwrap()
+        .success());
+    assert!(std::process::Command::new("git")
+        .args(["commit", "-m", "add a"])
+        .current_dir(path)
+        .status()
+        .unwrap()
+        .success());
+
+    // 2. Create branch customer/ali pointing to main (contains only a.txt)
+    {
+        let repo = git.repo.borrow();
+        let head = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.branch("customer/ali", &head, false).unwrap();
+    }
+
+    // 3. Create b.txt with "worll" and commit on main (main is now ahead and contains b.txt)
+    let b_path = path.join("b.txt");
+    std::fs::write(&b_path, "worll\n").unwrap();
+    assert!(std::process::Command::new("git")
+        .args(["add", "b.txt"])
+        .current_dir(path)
+        .status()
+        .unwrap()
+        .success());
+    assert!(std::process::Command::new("git")
+        .args(["commit", "-m", "add b"])
+        .current_dir(path)
+        .status()
+        .unwrap()
+        .success());
+
+    // 4. Switch to customer/ali
+    git.switch("customer/ali").unwrap();
+    // Write index to disk to simulate a clean switch to customer/ali
+    {
+        let repo = git.repo.borrow();
+        let mut index = repo.index().unwrap();
+        index.write().unwrap();
+    }
+
+    // 5. Modify a.txt to "hello" and commit on customer/ali
+    std::fs::write(&a_path, "hello\n").unwrap();
+    assert!(std::process::Command::new("git")
+        .args(["add", "a.txt"])
+        .current_dir(path)
+        .status()
+        .unwrap()
+        .success());
+
+    let commit_output = std::process::Command::new("git")
+        .args(["commit", "-m", "change a"])
+        .current_dir(path)
+        .output()
+        .unwrap();
+    assert!(commit_output.status.success());
+
+    // Get the commit hash of the last commit
+    let rev_output = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(path)
+        .output()
+        .unwrap();
+    let commit_hash = String::from_utf8_lossy(&rev_output.stdout)
+        .trim()
+        .to_string();
+
+    // 6. Create branch pick-hello from main
+    {
+        let repo = git.repo.borrow();
+        let main_branch = repo.find_branch("main", git2::BranchType::Local).unwrap();
+        let main_commit = main_branch.get().peel_to_commit().unwrap();
+        repo.branch("pick-hello", &main_commit, false).unwrap();
+    }
+
+    // 7. Switch to pick-hello
+    git.switch("pick-hello").unwrap();
+
+    // 8. Run git status --porcelain, it should be clean
+    let status_output = std::process::Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(path)
+        .output()
+        .unwrap();
+    let status_str = String::from_utf8_lossy(&status_output.stdout);
+    assert!(
+        status_str.trim().is_empty(),
+        "git status should be clean, but got:\n{}",
+        status_str
+    );
+
+    // 9. Cherry-pick the commit
+    let cherry_status = std::process::Command::new("git")
+        .args(["cherry-pick", &commit_hash])
+        .current_dir(path)
+        .status()
+        .unwrap();
+    assert!(cherry_status.success(), "cherry-pick should succeed");
 }
 
 // ---- merge / rebase / cherry-pick ----

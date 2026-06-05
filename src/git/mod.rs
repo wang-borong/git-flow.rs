@@ -82,17 +82,21 @@ impl Git {
         let workdir = repo
             .workdir()
             .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
-        let status = std::process::Command::new("git")
+        let output = std::process::Command::new("git")
             .arg("rebase")
             .arg(base_branch)
             .current_dir(workdir)
-            .status()?;
-        if !status.success() {
+            .output()?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
             let index = repo.index()?;
             if index.has_conflicts() {
-                bail!("rebase conflict detected, resolve manually");
+                bail!(
+                    "rebase conflict detected, resolve manually\n{}",
+                    stderr.trim()
+                );
             } else {
-                bail!("rebase failed");
+                bail!("rebase failed: {}", stderr.trim());
             }
         }
         Ok(())
@@ -103,17 +107,21 @@ impl Git {
         let workdir = repo
             .workdir()
             .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
-        let status = std::process::Command::new("git")
+        let output = std::process::Command::new("git")
             .arg("cherry-pick")
             .args(&commits)
             .current_dir(workdir)
-            .status()?;
-        if !status.success() {
+            .output()?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
             let index = repo.index()?;
             if index.has_conflicts() {
-                bail!("cherry-pick conflict detected, resolve manually");
+                bail!(
+                    "cherry-pick conflict detected, resolve manually\n{}",
+                    stderr.trim()
+                );
             } else {
-                bail!("cherry-pick failed");
+                bail!("cherry-pick failed: {}", stderr.trim());
             }
         }
         Ok(())
@@ -185,6 +193,9 @@ impl Git {
 
         let refname = format!("refs/heads/{}", target_branch);
         repo.set_head(&refname)?;
+
+        let mut index = repo.index()?;
+        index.write()?;
 
         Ok(())
     }
@@ -314,12 +325,13 @@ impl Git {
         let workdir = repo
             .workdir()
             .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
-        let status = std::process::Command::new("git")
+        let output = std::process::Command::new("git")
             .args(["rebase", "--continue"])
             .current_dir(workdir)
-            .status()?;
-        if !status.success() {
-            bail!("rebase continue failed");
+            .output()?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("rebase continue failed: {}", stderr.trim());
         }
         Ok(())
     }
@@ -330,12 +342,13 @@ impl Git {
         let workdir = repo
             .workdir()
             .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
-        let status = std::process::Command::new("git")
+        let output = std::process::Command::new("git")
             .args(["rebase", "--abort"])
             .current_dir(workdir)
-            .status()?;
-        if !status.success() {
-            bail!("rebase abort failed");
+            .output()?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("rebase abort failed: {}", stderr.trim());
         }
         Ok(())
     }
@@ -346,12 +359,13 @@ impl Git {
         let workdir = repo
             .workdir()
             .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
-        let status = std::process::Command::new("git")
+        let output = std::process::Command::new("git")
             .args(["merge", "--continue"])
             .current_dir(workdir)
-            .status()?;
-        if !status.success() {
-            bail!("merge continue failed");
+            .output()?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("merge continue failed: {}", stderr.trim());
         }
         Ok(())
     }
@@ -362,12 +376,13 @@ impl Git {
         let workdir = repo
             .workdir()
             .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
-        let status = std::process::Command::new("git")
+        let output = std::process::Command::new("git")
             .args(["merge", "--abort"])
             .current_dir(workdir)
-            .status()?;
-        if !status.success() {
-            bail!("merge abort failed");
+            .output()?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("merge abort failed: {}", stderr.trim());
         }
         Ok(())
     }
@@ -378,12 +393,13 @@ impl Git {
         let workdir = repo
             .workdir()
             .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
-        let status = std::process::Command::new("git")
+        let output = std::process::Command::new("git")
             .args(["cherry-pick", "--continue"])
             .current_dir(workdir)
-            .status()?;
-        if !status.success() {
-            bail!("cherry-pick continue failed");
+            .output()?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("cherry-pick continue failed: {}", stderr.trim());
         }
         Ok(())
     }
@@ -394,12 +410,13 @@ impl Git {
         let workdir = repo
             .workdir()
             .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
-        let status = std::process::Command::new("git")
+        let output = std::process::Command::new("git")
             .args(["cherry-pick", "--abort"])
             .current_dir(workdir)
-            .status()?;
-        if !status.success() {
-            bail!("cherry-pick abort failed");
+            .output()?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("cherry-pick abort failed: {}", stderr.trim());
         }
         Ok(())
     }
