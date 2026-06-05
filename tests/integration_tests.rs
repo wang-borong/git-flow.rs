@@ -102,6 +102,13 @@ fn setup_test_repo() -> TempDir {
         .output()
         .unwrap();
 
+    // Ensure the default branch is named 'main'
+    Command::new("git")
+        .args(["branch", "-M", "main"])
+        .current_dir(path)
+        .output()
+        .unwrap();
+
     // Create a dev branch as well (default in .gitflow.toml)
     Command::new("git")
         .args(["checkout", "-b", "dev"])

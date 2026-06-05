@@ -43,14 +43,16 @@ pub fn finish_task(
         Ok(git) => git,
     };
 
-    // -- load all branch types for safety rule validation --
-    let all_branch_types = match read_config(config_path) {
-        Ok(cfg) => cfg.branch_types,
+    // -- load config for safety rule validation --
+    let config = match read_config(config_path) {
+        Ok(cfg) => cfg,
         Err(err) => {
             Echo::error(format!("Failed to read config: {}", err));
             return;
         }
     };
+    let all_branch_types = config.branch_types.clone();
+    let base_branch = config.base_branch;
 
     // -- fetch source branch if requested --
     if opts.fetch {
@@ -137,6 +139,7 @@ pub fn finish_task(
         &branch_type,
         &opts,
         &all_branch_types,
+        base_branch.as_deref(),
     )
     .is_err()
     {
@@ -264,6 +267,7 @@ pub fn complete_finish_flow(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn resolve_target_branches(
     git: &Git,
     branch_name: &str,
@@ -272,9 +276,10 @@ pub fn resolve_target_branches(
     branch_type: &BranchType,
     opts: &FinishOptions,
     all_branch_types: &[BranchType],
+    base_branch: Option<&str>,
 ) -> Result<()> {
-    // Infer main branch: for feature/hotfix types, the `from` field is typically "main"
-    let main_branch = infer_main_branch(branch_type);
+    // Infer main branch: respects global configuration and does auto-detection
+    let main_branch = infer_main_branch(branch_type, base_branch);
 
     for (i, x) in remaining_targets.iter().enumerate() {
         // Safety: check if merge is allowed (using config-derived rules)
@@ -324,12 +329,28 @@ pub fn resolve_target_branches(
 }
 
 /// Infer the main branch name from the branch type configuration.
-/// For feature/hotfix/generalize/general types, `from` is typically "main".
-fn infer_main_branch(branch_type: &BranchType) -> Option<String> {
-    match branch_type.name.as_str() {
-        "feature" | "hotfix" | "release" | "generalize" | "general" => {
-            Some(branch_type.from.clone())
+fn infer_main_branch(branch_type: &BranchType, base_branch: Option<&str>) -> Option<String> {
+    if let Some(base) = base_branch {
+        return Some(base.to_string());
+    }
+
+    // Auto-detect master or main branch
+    let auto_main = if let Ok(git) = Git::open() {
+        if let Ok(branches) = git.get_local_branches() {
+            if branches.iter().any(|b| b == "master") && !branches.iter().any(|b| b == "main") {
+                "master".to_string()
+            } else {
+                "main".to_string()
+            }
+        } else {
+            "main".to_string()
         }
+    } else {
+        "main".to_string()
+    };
+
+    match branch_type.name.as_str() {
+        "feature" | "hotfix" | "release" | "generalize" | "general" => Some(auto_main),
         _ => None, // Customer-specific types don't need safety checks
     }
 }

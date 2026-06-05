@@ -154,10 +154,14 @@ pub fn continue_operation() {
                 // We resolve the rest of the remaining targets.
                 if remaining_targets.len() > 1 {
                     let next_targets = remaining_targets[1..].to_vec();
-                    // Load all branch types from config for safety rule validation
-                    let all_branch_types = crate::config::read::read_config(None)
-                        .map(|c| c.branch_types)
+                    // Load config for safety rule validation
+                    let config = crate::config::read::read_config(None).ok();
+                    let all_branch_types = config
+                        .as_ref()
+                        .map(|c| c.branch_types.clone())
                         .unwrap_or_default();
+                    let base_branch = config.and_then(|c| c.base_branch);
+
                     if crate::command::finish::resolve_target_branches(
                         &git,
                         &branch_name,
@@ -166,6 +170,7 @@ pub fn continue_operation() {
                         &branch_type,
                         &opts,
                         &all_branch_types,
+                        base_branch.as_deref(),
                     )
                     .is_err()
                     {

@@ -40,9 +40,15 @@ fn allowed_prefixes_for_main(branch_types: &[BranchType], main_branch: &str) -> 
         .iter()
         .filter(|bt| {
             // A branch type is allowed to merge to main if:
-            // 1. It originates from main (from == main_branch)
+            // 1. It originates from main (from == main_branch) OR is a standard release/hotfix/general/generalize branch
             // 2. It is not a long-lived customer branch type
-            bt.from == main_branch && bt.name != "customer" && !bt.create.starts_with("customer/")
+            (bt.from == main_branch
+                || bt.name == "release"
+                || bt.name == "hotfix"
+                || bt.name == "general"
+                || bt.name == "generalize")
+                && bt.name != "customer"
+                && !bt.create.starts_with("customer/")
         })
         .map(|bt| {
             // Extract the prefix from the `create` pattern (before {NAME})
