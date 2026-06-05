@@ -177,19 +177,14 @@ impl Git {
     pub fn switch(&self, target_branch: &str) -> Result<()> {
         let repo = self.repo.borrow();
         let branch = repo.find_branch(target_branch, git2::BranchType::Local)?;
-        let commit = branch.get().peel_to_commit()?;
-        let tree = commit.tree()?;
-
-        let refname = format!("refs/heads/{}", target_branch);
-        repo.set_head(&refname)?;
-
-        let mut index = repo.index()?;
-        index.read_tree(&tree)?;
-        index.write()?;
+        let commit = branch.get().peel(git2::ObjectType::Commit)?;
 
         let mut opts = CheckoutBuilder::new();
         opts.safe();
-        repo.checkout_head(Some(&mut opts))?;
+        repo.checkout_tree(&commit, Some(&mut opts))?;
+
+        let refname = format!("refs/heads/{}", target_branch);
+        repo.set_head(&refname)?;
 
         Ok(())
     }

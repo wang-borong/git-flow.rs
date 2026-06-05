@@ -73,6 +73,46 @@ fn switch_t() {
     assert!(result.is_ok());
 }
 
+#[test]
+fn switch_ahead_commits_t() {
+    let (td, git) = test_repo();
+    let path = td.path();
+
+    // 1. Create a branch "branch1" pointing to the current commit (init)
+    {
+        let repo = git.repo.borrow();
+        let head = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.branch("branch1", &head, false).unwrap();
+    }
+
+    // 2. Add and commit a file on main
+    let file_path = path.join("a.txt");
+    std::fs::write(&file_path, "content").unwrap();
+
+    let output = std::process::Command::new("git")
+        .args(["add", "a.txt"])
+        .current_dir(path)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let output = std::process::Command::new("git")
+        .args(["commit", "-m", "add a.txt"])
+        .current_dir(path)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    // Ensure file exists on main
+    assert!(file_path.exists());
+
+    // 3. Switch to branch1
+    git.switch("branch1").unwrap();
+
+    // 4. Verify that the file a.txt is removed from the working directory
+    assert!(!file_path.exists(), "a.txt should be removed from the working directory after switching to branch1");
+}
+
 // ---- merge / rebase / cherry-pick ----
 
 #[test]
