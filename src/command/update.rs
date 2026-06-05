@@ -50,31 +50,25 @@ pub fn update_branch(branch_name: String, branch_type: BranchType, force_rebase:
     // -- determine update strategy --
     // We rebase if force_rebase is true. Otherwise we merge.
     if force_rebase {
-        let finish = Echo::progress(format!("rebase {} onto {}", branch_name, branch_type.from));
+        Echo::info(format!("rebase {} onto {}", branch_name, branch_type.from));
         match git.rebase(&branch_type.from) {
             Err(err) => {
-                finish(false, &err.to_string());
+                Echo::error(err.to_string());
                 Echo::info("resolve conflicts, then run `gitflow continue`");
             }
             Ok(_) => {
-                finish(
-                    true,
-                    &format!("rebase {} onto {}", branch_name, branch_type.from),
-                );
+                Echo::success(format!("rebase {} onto {}", branch_name, branch_type.from));
             }
         }
     } else {
-        let finish = Echo::progress(format!("merge {} into {}", branch_type.from, branch_name));
+        Echo::info(format!("merge {} into {}", branch_type.from, branch_name));
         match git.merge(&branch_type.from, None) {
             Err(err) => {
-                finish(false, &err.to_string());
+                Echo::error(err.to_string());
                 Echo::info("resolve conflicts, then run `gitflow continue`");
             }
             Ok(_) => {
-                finish(
-                    true,
-                    &format!("merge {} into {}", branch_type.from, branch_name),
-                );
+                Echo::success(format!("merge {} into {}", branch_type.from, branch_name));
             }
         }
     }

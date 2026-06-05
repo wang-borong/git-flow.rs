@@ -40,8 +40,8 @@ impl Git {
             return Ok(());
         }
         let repo = self.repo.borrow();
-        let source_ref = repo.find_branch(source_branch, BranchType::Local)?;
-        let commit = source_ref.get().peel_to_commit()?;
+        let obj = repo.revparse_single(source_branch)?;
+        let commit = obj.peel_to_commit()?;
         repo.branch(target_branch, &commit, false)?;
         Ok(())
     }
@@ -210,5 +210,11 @@ impl Git {
         let base_obj = repo.revparse_single(base_branch)?;
         let (ahead, behind) = repo.graph_ahead_behind(local_obj.id(), base_obj.id())?;
         Ok((ahead, behind))
+    }
+
+    pub fn resolve_revision(&self, revision: &str) -> Result<()> {
+        let repo = self.repo.borrow();
+        repo.revparse_single(revision)?;
+        Ok(())
     }
 }

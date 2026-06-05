@@ -5,6 +5,7 @@ pub fn start_task(
     branch_type: BranchType,
     fetch: bool,
     pick_commits: Option<Vec<String>>,
+    source_customer: Option<String>,
 ) {
     let git = match Git::open() {
         Err(err) => {
@@ -63,7 +64,32 @@ pub fn start_task(
             finish(false, &err.to_string());
             return;
         }
-        Ok(_) => finish(true, &format!("create new branch {}", &branch_name)),
+        Ok(_) => {
+            finish(true, &format!("create new branch {}", &branch_name));
+            if branch_type.name == "general" {
+                if let Some(first_to) = branch_type.to.first() {
+                    let _ =
+                        git.set_branch_config(&branch_name, "gitflow-general-to", &first_to.name);
+                }
+                if let Some(ref src_cust) = source_customer {
+                    let _ = git.set_branch_config(
+                        &branch_name,
+                        "gitflow-general-from-customer",
+                        src_cust,
+                    );
+                }
+                if let Some(ref commits) = pick_commits {
+                    let _ = git.set_branch_config(
+                        &branch_name,
+                        "gitflow-general-picks",
+                        &commits.join(","),
+                    );
+                    if let Some(ref src_cust) = source_customer {
+                        let _ = git.save_generalize_state(src_cust, commits);
+                    }
+                }
+            }
+        }
     }
 
     // -- switch to new branch --

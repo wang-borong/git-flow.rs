@@ -75,9 +75,14 @@ impl Git {
         let head_commit = repo.head()?.peel_to_commit()?;
         let source_commit = repo.find_commit(source_oid)?;
         let tree = repo.find_tree(repo.index()?.write_tree()?)?;
-        let msg = custom_msg
-            .map(|m| m.to_string())
-            .unwrap_or_else(|| format!("Merge branch '{}'", source_branch));
+        let msg = if let Some(m) = custom_msg {
+            m.to_string()
+        } else {
+            let target_branch = self.current_branch()?;
+            let initial_msg = self.build_merge_message(source_branch, &target_branch, false)?;
+            self.edit_commit_message(&initial_msg)?
+        };
+
         repo.commit(
             Some("HEAD"),
             &sig,
@@ -232,9 +237,13 @@ impl Git {
         }
 
         // Merge succeeded, commit the squash
-        let msg = custom_msg
-            .map(|m| m.to_string())
-            .unwrap_or_else(|| format!("Squash merge branch '{}'", source_branch));
+        let msg = if let Some(m) = custom_msg {
+            m.to_string()
+        } else {
+            let target_branch = self.current_branch()?;
+            let initial_msg = self.build_merge_message(source_branch, &target_branch, true)?;
+            self.edit_commit_message(&initial_msg)?
+        };
 
         let commit_output = std::process::Command::new("git")
             .args(["commit", "-m", &msg])
@@ -291,6 +300,93 @@ impl Git {
             commits.push(oid.to_string());
         }
         Ok(commits)
+    }
+
+    /// commit messages on source_branch but not on target_branch
+    pub fn diff_commit_messages(
+        &self,
+        source_branch: &str,
+        target_branch: &str,
+    ) -> Result<Vec<String>> {
+        let repo = self.repo.borrow();
+        let source_ref = repo.find_branch(source_branch, git2::BranchType::Local)?;
+        let target_ref = repo.find_branch(target_branch, git2::BranchType::Local)?;
+        let source_oid = source_ref.get().target().unwrap();
+        let target_oid = target_ref.get().target().unwrap();
+
+        let mut walk = repo.revwalk()?;
+        walk.push(source_oid)?;
+        walk.hide(target_oid)?;
+
+        let mut messages = Vec::new();
+        for oid in walk {
+            let oid = oid?;
+            let commit = repo.find_commit(oid)?;
+            if let Ok(Some(msg)) = commit.summary() {
+                messages.push(msg.to_string());
+            }
+        }
+        // Reverse so that oldest commit is at the top
+        messages.reverse();
+        Ok(messages)
+    }
+
+    pub fn build_merge_message(
+        &self,
+        source_branch: &str,
+        target_branch: &str,
+        is_squash: bool,
+    ) -> Result<String> {
+        let mut msg = if is_squash {
+            format!("Squash merge branch '{}'\n\n", source_branch)
+        } else {
+            format!("Merge branch '{}'\n\n", source_branch)
+        };
+
+        if let Ok(commits) = self.diff_commit_messages(source_branch, target_branch) {
+            for c_msg in commits {
+                msg.push_str(&format!("* {}\n", c_msg));
+            }
+        }
+
+        msg.push_str("\n# Please enter the commit message for your changes. Lines starting\n# with '#' will be ignored, and an empty message aborts the commit.\n");
+
+        Ok(msg)
+    }
+
+    pub fn edit_commit_message(&self, initial_message: &str) -> Result<String> {
+        let repo = self.repo.borrow();
+        let edit_path = repo.path().join("GITFLOW_EDITMSG");
+        std::fs::write(&edit_path, initial_message)?;
+
+        let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
+
+        let status = std::process::Command::new(&editor)
+            .arg(&edit_path)
+            .status()?;
+
+        if !status.success() {
+            let _ = std::fs::remove_file(&edit_path);
+            bail!("Editor exited with error status");
+        }
+
+        let edited = std::fs::read_to_string(&edit_path)?;
+        let _ = std::fs::remove_file(&edit_path);
+
+        let mut final_msg = String::new();
+        for line in edited.lines() {
+            if !line.trim_start().starts_with('#') {
+                final_msg.push_str(line);
+                final_msg.push('\n');
+            }
+        }
+
+        let final_msg = final_msg.trim().to_string();
+        if final_msg.is_empty() {
+            bail!("Aborting commit due to empty commit message.");
+        }
+
+        Ok(final_msg)
     }
 
     /// output commits on source_branch but not on target_branch
@@ -532,6 +628,39 @@ impl Git {
         Ok(())
     }
 
+    pub fn set_branch_config(&self, branch: &str, key: &str, value: &str) -> Result<()> {
+        let repo = self.repo.borrow();
+        let mut config = repo.config()?;
+        config.set_str(&format!("branch.{}.{}", branch, key), value)?;
+        Ok(())
+    }
+
+    pub fn get_branch_config(&self, branch: &str, key: &str) -> Result<Option<String>> {
+        let repo = self.repo.borrow();
+        let config = repo.config()?;
+        match config.get_string(&format!("branch.{}.{}", branch, key)) {
+            Ok(val) => Ok(Some(val)),
+            Err(e) => {
+                if e.code() == git2::ErrorCode::NotFound {
+                    Ok(None)
+                } else {
+                    Err(e.into())
+                }
+            }
+        }
+    }
+
+    pub fn remove_branch_config(&self, branch: &str, key: &str) -> Result<()> {
+        let repo = self.repo.borrow();
+        let mut config = repo.config()?;
+        let full_key = format!("branch.{}.{}", branch, key);
+        match config.remove(&full_key) {
+            Ok(_) => Ok(()),
+            Err(e) if e.code() == git2::ErrorCode::NotFound => Ok(()),
+            Err(e) => Err(e.into()),
+        }
+    }
+
     /// Save state for generalize auto-cleanup
     pub fn save_generalize_state(&self, customer_branch: &str, commits: &[String]) -> Result<()> {
         let repo = self.repo.borrow();
@@ -543,6 +672,23 @@ impl Git {
 
     /// Load state for generalize auto-cleanup
     pub fn load_generalize_state(&self) -> Result<Option<(String, Vec<String>)>> {
+        if let Ok(current_branch) = self.current_branch() {
+            if let Ok(Some(cust)) =
+                self.get_branch_config(&current_branch, "gitflow-general-from-customer")
+            {
+                if let Ok(Some(picks_str)) =
+                    self.get_branch_config(&current_branch, "gitflow-general-picks")
+                {
+                    let commits = picks_str
+                        .split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                    return Ok(Some((cust, commits)));
+                }
+            }
+        }
+
         let repo = self.repo.borrow();
         let git_dir = repo.path();
         let customer_path = git_dir.join("GITFLOW_GENERALIZE_CUSTOMER");
@@ -562,6 +708,10 @@ impl Git {
 
     /// Clear generalize state
     pub fn clear_generalize_state(&self) -> Result<()> {
+        if let Ok(current_branch) = self.current_branch() {
+            let _ = self.remove_branch_config(&current_branch, "gitflow-general-from-customer");
+            let _ = self.remove_branch_config(&current_branch, "gitflow-general-picks");
+        }
         let repo = self.repo.borrow();
         let git_dir = repo.path();
         let _ = std::fs::remove_file(git_dir.join("GITFLOW_GENERALIZE_CUSTOMER"));

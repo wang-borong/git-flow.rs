@@ -2,6 +2,7 @@ use anyhow::{bail, Result};
 
 use crate::config::definition::{BranchType, Strategy};
 use crate::echo::Echo;
+use crate::git::Git;
 
 /// Determine if a branch prefix represents a customer-scoped long-lived branch.
 /// By convention, customer branches have a `create` pattern of "customer/{NAME}".
@@ -24,11 +25,14 @@ fn is_customer_scoped_branch(branch_name: &str, branch_types: &[BranchType]) -> 
     branch_types.iter().any(|bt| {
         // Customer-scoped branch types have `from` pointing to a customer branch
         // AND their `create` pattern reflects a customer prefix
-        bt.from.starts_with("customer/")
-            || (bt.create.contains("customer-") && {
+        // BUT exclude general/generalize branches because they are allowed to merge to main
+        bt.name != "general"
+            && bt.name != "generalize"
+            && (bt.from.starts_with("customer/") || bt.create.contains("customer-"))
+            && {
                 let prefix = bt.create.split('{').next().unwrap_or("");
                 !prefix.is_empty() && branch_name.starts_with(prefix)
-            })
+            }
     })
 }
 
@@ -67,6 +71,7 @@ fn allowed_prefixes_for_main(branch_types: &[BranchType], main_branch: &str) -> 
 /// - Only branches originating from main can merge to main
 /// - Customer branches cannot merge to other customer branches
 pub fn validate_merge_allowed(
+    git: &Git,
     branch_name: &str,
     target_branch: &str,
     main_branch: &str,
@@ -119,6 +124,13 @@ pub fn validate_merge_allowed(
         // Customer long-lived branches cannot merge to other customer branches
         if is_customer_branch(branch_name, branch_types) {
             bail!("safety rule: customer branch '{}' is not allowed to merge to another customer branch '{}'.", branch_name, target_branch);
+        }
+
+        // If it is a generalize/general branch, check if the configured target matches
+        if let Ok(Some(to_val)) = git.get_branch_config(branch_name, "gitflow-general-to") {
+            if to_val == target_branch {
+                return Ok(()); // Allowed!
+            }
         }
 
         // Allowed to merge to customer/X:

@@ -4,6 +4,7 @@ use tempfile::TempDir;
 
 fn run_gitflow(dir: &std::path::Path, args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_gitflow"))
+        .env("EDITOR", "true")
         .args(args)
         .current_dir(dir)
         .output()
@@ -602,6 +603,89 @@ fn test_custom_sync_single() {
 }
 
 // ============================================================
+// T9b: CUSTOM START FROM SPECIFIC COMMIT OR BRANCH
+// ============================================================
+fn git_rev_parse(dir: &std::path::Path, rev: &str) -> String {
+    let out = Command::new("git")
+        .args(["rev-parse", rev])
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+#[test]
+fn test_custom_start_from_commit() {
+    let td = setup_test_repo();
+    let path = td.path();
+
+    // Make a commit on main
+    git(path, &["checkout", "main"]);
+    fs::write(path.join("commit1.txt"), "commit 1").unwrap();
+    git(path, &["add", "commit1.txt"]);
+    git(path, &["commit", "-m", "first commit on main"]);
+    let commit1_hash = git_rev_parse(path, "HEAD");
+
+    // Make another commit on main
+    fs::write(path.join("commit2.txt"), "commit 2").unwrap();
+    git(path, &["add", "commit2.txt"]);
+    git(path, &["commit", "-m", "second commit on main"]);
+
+    // Create customer branch starting from the first commit hash
+    run_gitflow_success(path, &["custom", "start", "testcorp", &commit1_hash]);
+
+    // Verify it exists and points to commit1_hash
+    let branch_hash = git_rev_parse(path, "customer/testcorp");
+    assert_eq!(branch_hash, commit1_hash);
+
+    // Verify commit2.txt does not exist on the customer branch
+    git(path, &["checkout", "customer/testcorp"]);
+    assert!(path.join("commit1.txt").exists());
+    assert!(!path.join("commit2.txt").exists());
+}
+
+#[test]
+fn test_custom_start_from_other_branch() {
+    let td = setup_test_repo();
+    let path = td.path();
+
+    // Create a new local branch and commit
+    git(path, &["checkout", "-b", "feature/source"]);
+    fs::write(path.join("source.txt"), "source branch content").unwrap();
+    git(path, &["add", "source.txt"]);
+    git(path, &["commit", "-m", "commit on feature/source"]);
+    let source_hash = git_rev_parse(path, "HEAD");
+
+    // Create customer branch starting from feature/source
+    run_gitflow_success(path, &["custom", "start", "branchcorp", "feature/source"]);
+
+    // Verify customer branch points to the correct commit
+    let branch_hash = git_rev_parse(path, "customer/branchcorp");
+    assert_eq!(branch_hash, source_hash);
+
+    // Verify source.txt exists on customer branch
+    git(path, &["checkout", "customer/branchcorp"]);
+    assert!(path.join("source.txt").exists());
+}
+
+#[test]
+fn test_custom_start_invalid_base() {
+    let td = setup_test_repo();
+    let path = td.path();
+
+    // Try starting from an invalid revision
+    let out = run_gitflow_failure(
+        path,
+        &["custom", "start", "badcorp", "non-existent-commit-12345"],
+    );
+    assert!(out.contains("not found"));
+
+    // Verify the customer branch was not created
+    let branches = git_branches(path);
+    assert!(!branches.contains("customer/badcorp"));
+}
+
+// ============================================================
 // T10: SAFETY RULE — customer branch cannot merge to main
 // ============================================================
 #[test]
@@ -1078,4 +1162,172 @@ customer_sync_strategy = "merge"
 
     let current = git_current_branch(path);
     assert_eq!(current, "feature/customer-huawei/auto-feat");
+}
+
+fn git_current_commit_hash(dir: &std::path::Path) -> String {
+    let out = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+// ============================================================
+// T21: YQM Generalize branch finish (Allows generalize to merge to main)
+// ============================================================
+#[test]
+fn test_yqm_general_branch_merging() {
+    let td = setup_test_repo();
+    let path = td.path();
+
+    // Ensure we are on main branch before creating YQM config
+    git(path, &["checkout", "main"]);
+
+    // Create a YQM config
+    let config = r#"
+[branches]
+main = "main"
+customer = { prefix = "customer/" }
+generalize = { prefix = "generalize/" }
+
+[merge]
+default_strategy = "squash"
+customer_sync_strategy = "merge"
+"#;
+    fs::write(path.join(".gitflow.toml"), config).unwrap();
+    git(path, &["add", ".gitflow.toml"]);
+    git(path, &["commit", "-m", "yqm config"]);
+
+    // Create customer branch and commit a change on it
+    run_gitflow_success(path, &["custom", "start", "ali"]);
+    git(path, &["checkout", "customer/ali"]);
+    fs::write(path.join("ali.txt"), "ali content").unwrap();
+    git(path, &["add", "ali.txt"]);
+    git(path, &["commit", "-m", "add ali.txt"]);
+    let commit_hash = git_current_commit_hash(path);
+
+    // Go back to main
+    git(path, &["checkout", "main"]);
+
+    // Start generalize branch
+    run_gitflow_success(
+        path,
+        &[
+            "general",
+            "start",
+            "pick-ali",
+            "--customer",
+            "ali",
+            "--to",
+            "main",
+            "--pick",
+            &commit_hash,
+        ],
+    );
+
+    let current = git_current_branch(path);
+    assert_eq!(current, "generalize/customer-ali/pick-ali");
+
+    // Finish general branch
+    run_gitflow_success(path, &["general", "finish"]);
+
+    // Verify generalize branch was deleted
+    let branches = git_branches(path);
+    assert!(!branches.contains("generalize/customer-ali/pick-ali"));
+
+    // Verify main now has the squash-merged commit
+    git(path, &["checkout", "main"]);
+    let log = Command::new("git")
+        .args(["log", "-n", "1", "--oneline"])
+        .current_dir(path)
+        .output()
+        .unwrap();
+    let log_str = String::from_utf8_lossy(&log.stdout).to_string();
+    assert!(log_str.contains("Squash merge branch 'generalize/customer-ali/pick-ali'"));
+}
+
+#[test]
+fn test_yqm_general_branch_custom_routing() {
+    let td = setup_test_repo();
+    let path = td.path();
+
+    // Ensure we are on main branch before creating YQM config
+    git(path, &["checkout", "main"]);
+
+    // Create a YQM config
+    let config = r#"
+[branches]
+main = "main"
+customer = { prefix = "customer/" }
+generalize = { prefix = "generalize/" }
+
+[merge]
+default_strategy = "squash"
+customer_sync_strategy = "merge"
+"#;
+    fs::write(path.join(".gitflow.toml"), config).unwrap();
+    git(path, &["add", ".gitflow.toml"]);
+    git(path, &["commit", "-m", "yqm config"]);
+
+    // Create customer branch customer/huawei and commit a change on it
+    run_gitflow_success(path, &["custom", "start", "huawei"]);
+    git(path, &["checkout", "customer/huawei"]);
+    fs::write(path.join("huawei.txt"), "huawei content").unwrap();
+    git(path, &["add", "huawei.txt"]);
+    git(path, &["commit", "-m", "add huawei.txt"]);
+    let commit_hash = git_current_commit_hash(path);
+
+    // Create customer branch customer/ali
+    git(path, &["checkout", "main"]);
+    run_gitflow_success(path, &["custom", "start", "ali"]);
+
+    // Go back to main
+    git(path, &["checkout", "main"]);
+
+    // Start generalize branch from huawei targeting ali
+    run_gitflow_success(
+        path,
+        &[
+            "general",
+            "start",
+            "pick-y",
+            "--customer",
+            "huawei",
+            "--to",
+            "ali",
+            "--pick",
+            &commit_hash,
+        ],
+    );
+
+    let current = git_current_branch(path);
+    assert_eq!(current, "generalize/customer-huawei/pick-y");
+
+    // Finish general branch
+    run_gitflow_success(path, &["general", "finish"]);
+
+    // Verify generalize branch was deleted
+    let branches = git_branches(path);
+    assert!(!branches.contains("generalize/customer-huawei/pick-y"));
+
+    // Verify customer/ali now has the squash-merged commit
+    git(path, &["checkout", "customer/ali"]);
+    let log_ali = Command::new("git")
+        .args(["log", "-n", "1", "--oneline"])
+        .current_dir(path)
+        .output()
+        .unwrap();
+    let log_ali_str = String::from_utf8_lossy(&log_ali.stdout).to_string();
+    assert!(log_ali_str.contains("Squash merge branch 'generalize/customer-huawei/pick-y'"));
+
+    // Verify main does NOT have the squash-merged commit
+    git(path, &["checkout", "main"]);
+    let log_main = Command::new("git")
+        .args(["log", "--oneline"])
+        .current_dir(path)
+        .output()
+        .unwrap();
+    let log_main_str = String::from_utf8_lossy(&log_main.stdout).to_string();
+    assert!(!log_main_str.contains("Squash merge branch 'generalize/customer-huawei/pick-y'"));
 }

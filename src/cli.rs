@@ -364,6 +364,7 @@ pub enum CustomAction {
     /// Start (create) a customer branch
     Start {
         name: String,
+        base: Option<String>,
         #[arg(long)]
         push: bool,
         #[arg(long)]

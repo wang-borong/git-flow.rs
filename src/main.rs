@@ -191,6 +191,16 @@ fn resolve_branch_info(
         if re.is_match(&full_branch_name) {
             let mut resolved_bt = bt.clone();
             resolved_bt.resolve_customer(&full_branch_name, customer_opt.as_deref());
+            if resolved_bt.name == "general" {
+                if let Ok(Some(to_val)) =
+                    git.get_branch_config(&full_branch_name, "gitflow-general-to")
+                {
+                    resolved_bt.from = to_val.clone();
+                    for to_branch in &mut resolved_bt.to {
+                        to_branch.name = to_val.clone();
+                    }
+                }
+            }
             return Ok((full_branch_name, resolved_bt));
         }
     }
@@ -215,6 +225,14 @@ fn resolve_branch_info(
 
     let mut resolved_bt = bt.clone();
     resolved_bt.resolve_customer(&full_branch_name, customer_opt.as_deref());
+    if resolved_bt.name == "general" {
+        if let Ok(Some(to_val)) = git.get_branch_config(&full_branch_name, "gitflow-general-to") {
+            resolved_bt.from = to_val.clone();
+            for to_branch in &mut resolved_bt.to {
+                to_branch.name = to_val.clone();
+            }
+        }
+    }
 
     Ok((full_branch_name, resolved_bt))
 }
@@ -264,7 +282,7 @@ async fn main() {
                             if let Some(ref b) = base {
                                 bt.from = b.clone();
                             }
-                            command::start::start_task(branch_name, bt, *fetch, None);
+                            command::start::start_task(branch_name, bt, *fetch, None, None);
                         }
                     }
                 }
@@ -461,7 +479,7 @@ async fn main() {
                             if let Some(ref b) = base {
                                 bt.from = b.clone();
                             }
-                            command::start::start_task(branch_name, bt, *fetch, None);
+                            command::start::start_task(branch_name, bt, *fetch, None, None);
                         }
                     }
                 }
@@ -652,7 +670,7 @@ async fn main() {
                             if let Some(ref b) = base {
                                 bt.from = b.clone();
                             }
-                            command::start::start_task(branch_name, bt, *fetch, None);
+                            command::start::start_task(branch_name, bt, *fetch, None, None);
                         }
                     }
                 }
@@ -819,8 +837,13 @@ async fn main() {
             let remote_ref = remote.as_deref();
 
             match action {
-                CustomAction::Start { name, push, fetch } => {
-                    // Start creates the customer branch from main
+                CustomAction::Start {
+                    name,
+                    base,
+                    push,
+                    fetch,
+                } => {
+                    // Start creates the customer branch from main or specified base
                     if *fetch {
                         if let Ok(git) = Git::open() {
                             let r = remote.as_deref().unwrap_or("origin");
@@ -829,7 +852,7 @@ async fn main() {
                     }
                     command::customer::create_customer(
                         name,
-                        &main_branch,
+                        base.as_deref().unwrap_or(&main_branch),
                         if *push { remote_ref } else { None },
                     );
                 }
@@ -1033,6 +1056,7 @@ async fn main() {
                                 branch_type,
                                 *fetch,
                                 Some(commits),
+                                Some(customer_val),
                             );
                         }
                     }

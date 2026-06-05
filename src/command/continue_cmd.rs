@@ -25,38 +25,38 @@ pub fn continue_operation() {
     let mut native_continued = false;
 
     if git.is_rebase_in_progress() {
-        let finish = Echo::progress("continue rebase");
+        Echo::info("continue rebase");
         match git.rebase_continue() {
             Err(err) => {
-                finish(false, &err.to_string());
+                Echo::error(err.to_string());
                 return;
             }
             Ok(_) => {
-                finish(true, "rebase continued");
+                Echo::success("rebase continued");
                 native_continued = true;
             }
         }
     } else if git.is_merge_in_progress() {
-        let finish = Echo::progress("continue merge");
+        Echo::info("continue merge");
         match git.merge_continue() {
             Err(err) => {
-                finish(false, &err.to_string());
+                Echo::error(err.to_string());
                 return;
             }
             Ok(_) => {
-                finish(true, "merge continued");
+                Echo::success("merge continued");
                 native_continued = true;
             }
         }
     } else if git.is_cherrypick_in_progress() {
-        let finish = Echo::progress("continue cherry-pick");
+        Echo::info("continue cherry-pick");
         match git.cherrypick_continue() {
             Err(err) => {
-                finish(false, &err.to_string());
+                Echo::error(err.to_string());
                 return;
             }
             Ok(_) => {
-                finish(true, "cherry-pick continued");
+                Echo::success("cherry-pick continued");
                 native_continued = true;
             }
         }
@@ -66,17 +66,16 @@ pub fn continue_operation() {
     }) = state
     {
         if !remaining_targets.is_empty() && remaining_targets[0].strategy == Strategy::Squash {
-            let finish = Echo::progress("continue squash merge");
+            Echo::info("continue squash merge");
             match git.has_conflicts() {
                 Ok(true) => {
-                    finish(
-                        false,
+                    Echo::error(
                         "Conflicts still exist in the working tree. Please resolve them first.",
                     );
                     return;
                 }
                 Err(err) => {
-                    finish(false, &err.to_string());
+                    Echo::error(err.to_string());
                     return;
                 }
                 Ok(false) => {}
@@ -87,7 +86,7 @@ pub fn continue_operation() {
                     let workdir = match git.workdir() {
                         Ok(d) => d,
                         Err(err) => {
-                            finish(false, &err.to_string());
+                            Echo::error(err.to_string());
                             return;
                         }
                     };
@@ -116,25 +115,25 @@ pub fn continue_operation() {
 
                     match cmd.status() {
                         Ok(status) if status.success() => {
-                            finish(true, "squash merge committed");
+                            Echo::success("squash merge committed");
                             native_continued = true;
                         }
                         Ok(_) => {
-                            finish(false, "git commit failed");
+                            Echo::error("git commit failed");
                             return;
                         }
                         Err(err) => {
-                            finish(false, &err.to_string());
+                            Echo::error(err.to_string());
                             return;
                         }
                     }
                 }
                 Ok(false) => {
-                    finish(true, "working tree clean, proceeding");
+                    Echo::success("working tree clean, proceeding");
                     native_continued = true;
                 }
                 Err(err) => {
-                    finish(false, &err.to_string());
+                    Echo::error(err.to_string());
                     return;
                 }
             }
@@ -211,9 +210,7 @@ pub fn continue_operation() {
                 original_branch,
                 ..
             } => {
-                // The sync conflict has been resolved (via merge_continue or rebase_continue above).
-                // Now push if needed and restore the original branch.
-                let finish_sync = Echo::progress(format!("complete sync of {}", customer_branch));
+                Echo::info(format!("complete sync of {}", customer_branch));
 
                 if push {
                     if let Some(ref remote_name) = remote {
@@ -236,10 +233,10 @@ pub fn continue_operation() {
                     }
                 }
 
-                finish_sync(
-                    true,
-                    &format!("'{}' synced with '{}'", customer_branch, main_branch),
-                );
+                Echo::success(format!(
+                    "'{}' synced with '{}'",
+                    customer_branch, main_branch
+                ));
 
                 // Restore original branch
                 if original_branch != customer_branch {

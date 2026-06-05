@@ -310,7 +310,9 @@ pub fn resolve_target_branches(
     for (i, x) in remaining_targets.iter().enumerate() {
         // Safety: check if merge is allowed (using config-derived rules)
         if let Some(ref main) = main_branch {
-            if let Err(err) = validate_merge_allowed(branch_name, &x.name, main, all_branch_types) {
+            if let Err(err) =
+                validate_merge_allowed(git, branch_name, &x.name, main, all_branch_types)
+            {
                 Echo::error(err.to_string());
                 return Err(err);
             }
@@ -396,11 +398,11 @@ fn merge(
     target_branch: &str,
     custom_template: Option<&str>,
 ) -> Result<()> {
-    let finish = Echo::progress(format!("merge {} into {}", source_branch, target_branch));
+    Echo::info(format!("merge {} into {}", source_branch, target_branch));
 
     let result = git.switch(target_branch);
     if let Err(err) = result {
-        finish(false, &err.to_string());
+        Echo::error(err.to_string());
         return Err(err);
     }
 
@@ -408,14 +410,11 @@ fn merge(
         custom_template.map(|t| format_commit_message(t, source_branch, target_branch));
     let result = git.merge(source_branch, custom_msg.as_deref());
     if let Err(err) = result {
-        finish(false, &err.to_string());
+        Echo::error(err.to_string());
         return Err(err);
     }
 
-    finish(
-        true,
-        &format!("merge {} into {}", source_branch, target_branch),
-    );
+    Echo::success(format!("merge {} into {}", source_branch, target_branch));
     Ok(())
 }
 
@@ -487,14 +486,14 @@ fn squash_merge(
     target_branch: &str,
     custom_template: Option<&str>,
 ) -> Result<()> {
-    let finish = Echo::progress(format!(
+    Echo::info(format!(
         "squash merge {} into {}",
         source_branch, target_branch
     ));
 
     let result = git.switch(target_branch);
     if let Err(err) = result {
-        finish(false, &err.to_string());
+        Echo::error(err.to_string());
         return Err(err);
     }
 
@@ -502,14 +501,14 @@ fn squash_merge(
         custom_template.map(|t| format_commit_message(t, source_branch, target_branch));
     let result = git.squash_merge(source_branch, custom_msg.as_deref());
     if let Err(err) = result {
-        finish(false, &err.to_string());
+        Echo::error(err.to_string());
         return Err(err);
     }
 
-    finish(
-        true,
-        &format!("squash merge {} into {}", source_branch, target_branch),
-    );
+    Echo::success(format!(
+        "squash merge {} into {}",
+        source_branch, target_branch
+    ));
     Ok(())
 }
 

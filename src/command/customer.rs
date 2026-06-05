@@ -1,7 +1,7 @@
 use crate::{echo::Echo, git::Git};
 
-/// Create a new customer branch from main.
-pub fn create_customer(customer_name: &str, main_branch: &str, remote: Option<&str>) {
+/// Create a new customer branch from a base branch/commit.
+pub fn create_customer(customer_name: &str, base: &str, remote: Option<&str>) {
     let git = match Git::open() {
         Err(err) => {
             Echo::error(err.to_string());
@@ -29,24 +29,21 @@ pub fn create_customer(customer_name: &str, main_branch: &str, remote: Option<&s
         return;
     }
 
-    if branches.iter().all(|b| b != main_branch) {
-        Echo::error(format!("main branch '{}' not found", main_branch));
+    if let Err(err) = git.resolve_revision(base) {
+        Echo::error(format!("base revision '{}' not found: {}", base, err));
         return;
     }
 
-    // -- create branch from main --
-    let finish = Echo::progress(format!(
-        "create '{}' from '{}'",
-        customer_branch, main_branch
-    ));
-    match git.create_local_branch(main_branch, &customer_branch) {
+    // -- create branch from base --
+    let finish = Echo::progress(format!("create '{}' from '{}'", customer_branch, base));
+    match git.create_local_branch(base, &customer_branch) {
         Err(err) => {
             finish(false, &err.to_string());
             return;
         }
         Ok(_) => finish(
             true,
-            &format!("create '{}' from '{}'", customer_branch, main_branch),
+            &format!("create '{}' from '{}'", customer_branch, base),
         ),
     }
 
@@ -124,10 +121,10 @@ pub fn sync_customer(
 
     // -- sync main into customer --
     if rebase {
-        let finish = Echo::progress(format!("rebase {} onto {}", customer_branch, main_branch));
+        Echo::info(format!("rebase {} onto {}", customer_branch, main_branch));
         match git.rebase(main_branch) {
             Err(err) => {
-                finish(false, &err.to_string());
+                Echo::error(err.to_string());
                 // Save state so `gitflow continue` can resume after conflict resolution
                 let state = crate::command::state::GitflowState::Sync {
                     customer_branch: customer_branch.clone(),
@@ -146,16 +143,15 @@ pub fn sync_customer(
                 }
                 return;
             }
-            Ok(_) => finish(
-                true,
-                &format!("rebase {} onto {}", customer_branch, main_branch),
-            ),
+            Ok(_) => {
+                Echo::success(format!("rebase {} onto {}", customer_branch, main_branch));
+            }
         }
     } else {
-        let finish = Echo::progress(format!("merge {} into {}", main_branch, customer_branch));
+        Echo::info(format!("merge {} into {}", main_branch, customer_branch));
         match git.merge(main_branch, None) {
             Err(err) => {
-                finish(false, &err.to_string());
+                Echo::error(err.to_string());
                 // Save state so `gitflow continue` can resume after conflict resolution
                 let state = crate::command::state::GitflowState::Sync {
                     customer_branch: customer_branch.clone(),
@@ -174,10 +170,9 @@ pub fn sync_customer(
                 }
                 return;
             }
-            Ok(_) => finish(
-                true,
-                &format!("merge {} into {}", main_branch, customer_branch),
-            ),
+            Ok(_) => {
+                Echo::success(format!("merge {} into {}", main_branch, customer_branch));
+            }
         }
     }
 
