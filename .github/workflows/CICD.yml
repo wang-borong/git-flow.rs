@@ -13,6 +13,9 @@ on:
     tags:
       - '*'
 
+permissions:
+  contents: write
+
 jobs:
   all-jobs:
     if: always()
