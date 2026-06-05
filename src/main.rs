@@ -315,6 +315,7 @@ async fn main() {
                                 no_verify: *no_verify,
                                 sign: *sign,
                                 customer: customer.clone(),
+                                cleanup_customer: false,
                             };
                             command::finish::finish_task(branch_name, branch_type, opts);
                         }
@@ -506,6 +507,7 @@ async fn main() {
                                 no_verify: *no_verify,
                                 sign: *sign,
                                 customer: customer.clone(),
+                                cleanup_customer: false,
                             };
                             command::finish::finish_task(branch_name, branch_type, opts);
                         }
@@ -689,6 +691,7 @@ async fn main() {
                                 no_verify: *no_verify,
                                 sign: *sign,
                                 customer: customer.clone(),
+                                cleanup_customer: false,
                             };
                             command::finish::finish_task(branch_name, branch_type, opts);
                         }
@@ -846,11 +849,13 @@ async fn main() {
                 CustomAction::Sync {
                     customer_name,
                     push,
+                    rebase,
                 } => {
                     if customer_name == "all" {
                         command::customer::sync_all_customers(
                             &main_branch,
                             *push,
+                            *rebase,
                             remote_ref,
                             &customer_prefix,
                         );
@@ -859,6 +864,7 @@ async fn main() {
                             customer_name,
                             &main_branch,
                             *push,
+                            *rebase,
                             remote_ref,
                         );
                     }
@@ -1017,6 +1023,7 @@ async fn main() {
                     keep,
                     no_verify,
                     r#continue,
+                    cleanup_customer,
                 } => {
                     if *r#continue {
                         command::continue_cmd::continue_operation();
@@ -1038,6 +1045,7 @@ async fn main() {
                                 no_verify: *no_verify,
                                 sign: false,
                                 customer: None,
+                                cleanup_customer: *cleanup_customer,
                             };
                             command::finish::finish_task(branch_name, branch_type, opts);
                         }
@@ -1206,6 +1214,7 @@ async fn main() {
                         no_verify: *no_verify,
                         sign: *sign,
                         customer: customer.clone(),
+                        cleanup_customer: false,
                     };
                     command::finish::finish_task(branch_name, branch_type, opts);
                 }

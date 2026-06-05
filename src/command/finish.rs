@@ -23,6 +23,7 @@ pub struct FinishOptions {
     pub no_verify: bool,
     pub sign: bool,
     pub customer: Option<String>,
+    pub cleanup_customer: bool,
 }
 
 pub fn finish_task(branch_name: String, branch_type: BranchType, opts: FinishOptions) {
@@ -132,6 +133,53 @@ pub fn finish_task(branch_name: String, branch_type: BranchType, opts: FinishOpt
     // -- run after finish hook --
     if !opts.no_verify {
         let _ = run_hook(branch_type.after_finish.clone(), &branch_name, &branch_type);
+    }
+
+    // -- auto cleanup customer branch if requested --
+    if opts.cleanup_customer {
+        if let Ok(Some((customer_branch, mut commits))) = git.load_generalize_state() {
+            let finish = Echo::progress(format!("auto-cleanup on {}", customer_branch));
+            // switch to customer branch
+            if let Err(err) = git.switch(&customer_branch) {
+                finish(
+                    false,
+                    &format!("failed to switch to {}: {}", customer_branch, err),
+                );
+            } else {
+                // revert commits (in reverse order)
+                commits.reverse();
+                match git.revert(commits.clone()) {
+                    Ok(_) => {
+                        finish(
+                            true,
+                            &format!("reverted {} commits on {}", commits.len(), customer_branch),
+                        );
+                        // clear state
+                        let _ = git.clear_generalize_state();
+
+                        // Switch back to main branch (or the first target branch)
+                        if let Some(tb) = target_branches.first() {
+                            let _ = git.switch(&tb.name);
+                        }
+                    }
+                    Err(_err) => {
+                        let _ = git.revert_abort();
+                        finish(false, "revert conflicts, aborted auto-cleanup");
+                        // switch back
+                        if let Some(tb) = target_branches.first() {
+                            let _ = git.switch(&tb.name);
+                        }
+                        Echo::info(format!(
+                            "Auto-cleanup failed. Please manually switch to {} and revert these commits to avoid future sync conflicts:\n{}",
+                            customer_branch,
+                            commits.join(", ")
+                        ));
+                    }
+                }
+            }
+        } else {
+            Echo::info("No generalize state found to cleanup");
+        }
     }
 }
 

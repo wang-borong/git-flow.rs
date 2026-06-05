@@ -382,6 +382,9 @@ pub enum CustomAction {
         customer_name: String,
         #[arg(long)]
         push: bool,
+        /// Use rebase instead of merge for syncing
+        #[arg(long)]
+        rebase: bool,
     },
     /// Checkout a customer branch
     Checkout { name: String },
@@ -428,6 +431,9 @@ pub enum GeneralAction {
         no_verify: bool,
         #[arg(long)]
         r#continue: bool,
+        /// Automatically revert the cherry-picked commits on the customer branch
+        #[arg(long)]
+        cleanup_customer: bool,
     },
     /// Update a general branch
     Update {

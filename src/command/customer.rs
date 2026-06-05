@@ -77,8 +77,14 @@ pub fn create_customer(customer_name: &str, main_branch: &str, remote: Option<&s
     ));
 }
 
-/// Sync main changes into a customer branch (merge strategy).
-pub fn sync_customer(customer_name: &str, main_branch: &str, push: bool, remote: Option<&str>) {
+/// Sync main changes into a customer branch.
+pub fn sync_customer(
+    customer_name: &str,
+    main_branch: &str,
+    push: bool,
+    rebase: bool,
+    remote: Option<&str>,
+) {
     let git = match Git::open() {
         Err(err) => {
             Echo::error(err.to_string());
@@ -111,18 +117,33 @@ pub fn sync_customer(customer_name: &str, main_branch: &str, push: bool, remote:
     }
     finish(true, &format!("switch to {}", customer_branch));
 
-    // -- merge main into customer --
-    let finish = Echo::progress(format!("merge {} into {}", main_branch, customer_branch));
-    match git.merge(main_branch, None) {
-        Err(err) => {
-            finish(false, &err.to_string());
-            Echo::info("resolve conflicts, then run `gitflow continue`");
-            return;
+    // -- sync main into customer --
+    if rebase {
+        let finish = Echo::progress(format!("rebase {} onto {}", customer_branch, main_branch));
+        match git.rebase(main_branch) {
+            Err(err) => {
+                finish(false, &err.to_string());
+                Echo::info("resolve conflicts, then run `gitflow continue`");
+                return;
+            }
+            Ok(_) => finish(
+                true,
+                &format!("rebase {} onto {}", customer_branch, main_branch),
+            ),
         }
-        Ok(_) => finish(
-            true,
-            &format!("merge {} into {}", main_branch, customer_branch),
-        ),
+    } else {
+        let finish = Echo::progress(format!("merge {} into {}", main_branch, customer_branch));
+        match git.merge(main_branch, None) {
+            Err(err) => {
+                finish(false, &err.to_string());
+                Echo::info("resolve conflicts, then run `gitflow continue`");
+                return;
+            }
+            Ok(_) => finish(
+                true,
+                &format!("merge {} into {}", main_branch, customer_branch),
+            ),
+        }
     }
 
     // -- push if requested --
@@ -158,6 +179,7 @@ pub fn sync_customer(customer_name: &str, main_branch: &str, push: bool, remote:
 pub fn sync_all_customers(
     main_branch: &str,
     push: bool,
+    rebase: bool,
     remote: Option<&str>,
     customer_prefix: &str,
 ) {
@@ -207,37 +229,82 @@ pub fn sync_all_customers(
             continue;
         }
 
-        // -- merge main --
-        match git.merge(main_branch, None) {
-            Err(err) => {
-                // Abort the failed merge
-                let _ = git.merge_abort();
-                results.push((
-                    customer_branch.to_string(),
-                    false,
-                    format!("conflict: {}", err),
-                ));
-                fail_count += 1;
-            }
-            Ok(_) => {
-                // -- push if requested --
-                if push {
-                    if let Some(remote_name) = remote {
-                        if let Err(err) =
-                            git.push_branch(remote_name, customer_branch, customer_branch)
-                        {
-                            results.push((
-                                customer_branch.to_string(),
-                                false,
-                                format!("push failed: {}", err),
-                            ));
-                            fail_count += 1;
-                            continue;
+        // -- sync main --
+        if rebase {
+            match git.rebase(main_branch) {
+                Err(err) => {
+                    // Abort the failed rebase
+                    let _ = git.rebase_abort();
+                    results.push((
+                        customer_branch.to_string(),
+                        false,
+                        format!("rebase conflict: {}", err),
+                    ));
+                    fail_count += 1;
+                }
+                Ok(_) => {
+                    // -- push if requested --
+                    if push {
+                        if let Some(remote_name) = remote {
+                            // Using force-with-lease might be needed for rebase, but currently push_branch does normal push
+                            // So rebase and push in sync_all might fail if branch is already published
+                            if let Err(err) =
+                                git.push_branch(remote_name, customer_branch, customer_branch)
+                            {
+                                results.push((
+                                    customer_branch.to_string(),
+                                    false,
+                                    format!("push failed: {}", err),
+                                ));
+                                fail_count += 1;
+                                continue;
+                            }
                         }
                     }
+                    results.push((
+                        customer_branch.to_string(),
+                        true,
+                        "synced (rebased)".to_string(),
+                    ));
+                    success_count += 1;
                 }
-                results.push((customer_branch.to_string(), true, "synced".to_string()));
-                success_count += 1;
+            }
+        } else {
+            match git.merge(main_branch, None) {
+                Err(err) => {
+                    // Abort the failed merge
+                    let _ = git.merge_abort();
+                    results.push((
+                        customer_branch.to_string(),
+                        false,
+                        format!("merge conflict: {}", err),
+                    ));
+                    fail_count += 1;
+                }
+                Ok(_) => {
+                    // -- push if requested --
+                    if push {
+                        if let Some(remote_name) = remote {
+                            if let Err(err) =
+                                git.push_branch(remote_name, customer_branch, customer_branch)
+                            {
+                                results.push((
+                                    customer_branch.to_string(),
+                                    false,
+                                    format!("push failed: {}", err),
+                                ));
+                                fail_count += 1;
+                                continue;
+                            }
+                        }
+                    }
+                    results.push((
+                        customer_branch.to_string(),
+                        true,
+                        "synced (merged)".to_string(),
+                    ));
+                    success_count += 1;
+                }
             }
         }
     }
@@ -256,6 +323,11 @@ pub fn sync_all_customers(
         "Total: {} succeeded, {} failed",
         success_count, fail_count
     ));
+    if fail_count > 0 {
+        println!();
+        Echo::info("Hint: To manually resolve failed branches, run:");
+        Echo::info("  gitflow custom sync <branch_name> [--rebase]");
+    }
 }
 
 /// List all customer branches and their status relative to main.

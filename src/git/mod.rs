@@ -145,6 +145,48 @@ impl Git {
         Ok(())
     }
 
+    pub fn revert(&self, commits: Vec<String>) -> Result<()> {
+        if crate::utils::is_dry_run() {
+            println!("[Dry Run] git revert --no-edit {}", commits.join(" "));
+            return Ok(());
+        }
+        let repo = self.repo.borrow();
+        let workdir = repo
+            .workdir()
+            .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
+        let output = std::process::Command::new("git")
+            .arg("revert")
+            .arg("--no-edit")
+            .args(&commits)
+            .current_dir(workdir)
+            .output()?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("revert failed or conflicted: {}", stderr.trim());
+        }
+        Ok(())
+    }
+
+    pub fn revert_abort(&self) -> Result<()> {
+        if crate::utils::is_dry_run() {
+            println!("[Dry Run] git revert --abort");
+            return Ok(());
+        }
+        let repo = self.repo.borrow();
+        let workdir = repo
+            .workdir()
+            .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
+        let output = std::process::Command::new("git")
+            .args(["revert", "--abort"])
+            .current_dir(workdir)
+            .output()?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("revert abort failed: {}", stderr.trim());
+        }
+        Ok(())
+    }
+
     /// Squash merge: merge the source tree into the target without preserving
     /// individual commits. Creates a single commit with all changes.
     pub fn squash_merge(&self, source_branch: &str, custom_msg: Option<&str>) -> Result<()> {
@@ -474,6 +516,43 @@ impl Git {
             let stderr = String::from_utf8_lossy(&output.stderr);
             bail!("cherry-pick abort failed: {}", stderr.trim());
         }
+        Ok(())
+    }
+
+    /// Save state for generalize auto-cleanup
+    pub fn save_generalize_state(&self, customer_branch: &str, commits: &[String]) -> Result<()> {
+        let repo = self.repo.borrow();
+        let git_dir = repo.path();
+        std::fs::write(git_dir.join("GITFLOW_GENERALIZE_CUSTOMER"), customer_branch)?;
+        std::fs::write(git_dir.join("GITFLOW_GENERALIZE_PICKS"), commits.join("\n"))?;
+        Ok(())
+    }
+
+    /// Load state for generalize auto-cleanup
+    pub fn load_generalize_state(&self) -> Result<Option<(String, Vec<String>)>> {
+        let repo = self.repo.borrow();
+        let git_dir = repo.path();
+        let customer_path = git_dir.join("GITFLOW_GENERALIZE_CUSTOMER");
+        let picks_path = git_dir.join("GITFLOW_GENERALIZE_PICKS");
+        if !customer_path.exists() || !picks_path.exists() {
+            return Ok(None);
+        }
+        let customer = std::fs::read_to_string(customer_path)?.trim().to_string();
+        let picks = std::fs::read_to_string(picks_path)?;
+        let commits: Vec<String> = picks
+            .lines()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        Ok(Some((customer, commits)))
+    }
+
+    /// Clear generalize state
+    pub fn clear_generalize_state(&self) -> Result<()> {
+        let repo = self.repo.borrow();
+        let git_dir = repo.path();
+        let _ = std::fs::remove_file(git_dir.join("GITFLOW_GENERALIZE_CUSTOMER"));
+        let _ = std::fs::remove_file(git_dir.join("GITFLOW_GENERALIZE_PICKS"));
         Ok(())
     }
 }
