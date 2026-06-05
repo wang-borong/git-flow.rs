@@ -364,3 +364,88 @@ fn fetch_remote_branches_t() {
     let (_td, git) = test_repo();
     git.fetch_remote_data().unwrap();
 }
+
+#[cfg(test)]
+mod extra_tests {
+    use super::*;
+
+    #[test]
+    fn squash_merge_conflict_t() {
+        let (td, git) = test_repo();
+        let path = td.path();
+
+        // 1. Create a.txt with "hello" and commit on main
+        let a_path = path.join("a.txt");
+        std::fs::write(&a_path, "hello\n").unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["add", "a.txt"])
+            .current_dir(path)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "add a"])
+            .current_dir(path)
+            .status()
+            .unwrap()
+            .success());
+
+        // 2. Create feature branch pointing to main
+        {
+            let repo = git.repo.borrow();
+            let head = repo.head().unwrap().peel_to_commit().unwrap();
+            repo.branch("feature", &head, false).unwrap();
+        }
+
+        // 3. Modify a.txt to "hello world" and commit on main
+        std::fs::write(&a_path, "hello world\n").unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["add", "a.txt"])
+            .current_dir(path)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "update a on main"])
+            .current_dir(path)
+            .status()
+            .unwrap()
+            .success());
+
+        // 4. Switch to feature branch
+        git.switch("feature").unwrap();
+
+        // 5. Modify a.txt to "hello features" and commit on feature branch
+        std::fs::write(&a_path, "hello features\n").unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["add", "a.txt"])
+            .current_dir(path)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "update a on feature"])
+            .current_dir(path)
+            .status()
+            .unwrap()
+            .success());
+
+        // 6. Switch back to main branch
+        git.switch("main").unwrap();
+
+        // 7. Try to squash merge feature into main. It should fail due to conflict!
+        let merge_res = git.squash_merge("feature", None);
+        assert!(merge_res.is_err());
+        let err_str = merge_res.err().unwrap().to_string();
+        assert!(
+            err_str.contains("conflict") || err_str.contains("Conflict"),
+            "Actual error: {}",
+            err_str
+        );
+
+        // 8. Verify that conflict markers exist in the file!
+        let content = std::fs::read_to_string(&a_path).unwrap();
+        assert!(content.contains("<<<<<<<"));
+        assert!(content.contains(">>>>>>>"));
+    }
+}

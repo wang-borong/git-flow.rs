@@ -13,6 +13,7 @@ pub mod publish;
 pub mod rebase_cmd;
 pub mod rename;
 pub mod start;
+pub mod state;
 pub mod sync;
 pub mod track;
 pub mod update;

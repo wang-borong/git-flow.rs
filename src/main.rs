@@ -317,7 +317,12 @@ async fn main() {
                                 customer: customer.clone(),
                                 cleanup_customer: false,
                             };
-                            command::finish::finish_task(branch_name, branch_type, opts);
+                            command::finish::finish_task(
+                                branch_name,
+                                branch_type,
+                                opts,
+                                args.config.clone(),
+                            );
                         }
                     }
                 }
@@ -509,7 +514,12 @@ async fn main() {
                                 customer: customer.clone(),
                                 cleanup_customer: false,
                             };
-                            command::finish::finish_task(branch_name, branch_type, opts);
+                            command::finish::finish_task(
+                                branch_name,
+                                branch_type,
+                                opts,
+                                args.config.clone(),
+                            );
                         }
                     }
                 }
@@ -693,7 +703,12 @@ async fn main() {
                                 customer: customer.clone(),
                                 cleanup_customer: false,
                             };
-                            command::finish::finish_task(branch_name, branch_type, opts);
+                            command::finish::finish_task(
+                                branch_name,
+                                branch_type,
+                                opts,
+                                args.config.clone(),
+                            );
                         }
                     }
                 }
@@ -1047,7 +1062,12 @@ async fn main() {
                                 customer: None,
                                 cleanup_customer: *cleanup_customer,
                             };
-                            command::finish::finish_task(branch_name, branch_type, opts);
+                            command::finish::finish_task(
+                                branch_name,
+                                branch_type,
+                                opts,
+                                args.config.clone(),
+                            );
                         }
                     }
                 }
@@ -1216,7 +1236,12 @@ async fn main() {
                         customer: customer.clone(),
                         cleanup_customer: false,
                     };
-                    command::finish::finish_task(branch_name, branch_type, opts);
+                    command::finish::finish_task(
+                        branch_name,
+                        branch_type,
+                        opts,
+                        args.config.clone(),
+                    );
                 }
             }
         }

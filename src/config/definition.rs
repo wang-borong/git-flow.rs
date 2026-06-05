@@ -1,6 +1,6 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Config {
     pub branch_types: Vec<BranchType>,
     #[serde(default)]
@@ -9,7 +9,7 @@ pub struct Config {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct BranchType {
     pub name: String,
     pub create: String,
@@ -31,7 +31,7 @@ pub struct BranchType {
     pub after_rebase: Option<Command>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TargetBranch {
     pub name: String,
     pub strategy: Strategy,
@@ -41,7 +41,7 @@ pub struct TargetBranch {
     pub tag: Option<bool>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub enum Strategy {
     #[serde(rename = "merge")]
     Merge,
@@ -53,7 +53,7 @@ pub enum Strategy {
     Squash,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Command {
     pub command: String,
     pub args: Vec<String>,

@@ -47,7 +47,7 @@ pub fn start_task(
         return;
     }
     if branches.iter().any(|x| x.as_str() == branch_name) {
-        Echo::error(format!("branch {} does exist", branch_name));
+        Echo::error(format!("branch {} already exists", branch_name));
         return;
     }
 
@@ -83,6 +83,37 @@ pub fn start_task(
         match git.cherry_pick(commits) {
             Err(err) => {
                 finish(false, &err.to_string());
+
+                // ISSUE-S3: Use case-insensitive conflict detection
+                let err_str = err.to_string().to_lowercase();
+                if err_str.contains("conflict") {
+                    let state = crate::command::state::GitflowState::Start {
+                        branch_name: branch_name.clone(),
+                        branch_type: branch_type.clone(),
+                    };
+                    if let Err(save_err) = state.save(&git) {
+                        Echo::error(format!("Failed to save gitflow state: {}", save_err));
+                    } else {
+                        Echo::info(
+                            "Gitflow state saved. Resolve the conflict and run 'gitflow continue'.",
+                        );
+                    }
+                } else {
+                    // ISSUE-S2: Non-conflict failure — clean up dangling branch
+                    // Switch back to source branch and delete the new (empty) branch
+                    let _ = git.switch(&branch_type.from);
+                    let del_finish =
+                        Echo::progress(format!("cleanup dangling branch {}", branch_name));
+                    match git.del_local_branch(&branch_name) {
+                        Ok(_) => {
+                            del_finish(true, &format!("deleted dangling branch {}", branch_name))
+                        }
+                        Err(del_err) => del_finish(
+                            false,
+                            &format!("could not delete {}: {}", branch_name, del_err),
+                        ),
+                    }
+                }
                 return;
             }
             Ok(_) => finish(true, &msg),

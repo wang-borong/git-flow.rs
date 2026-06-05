@@ -66,7 +66,7 @@ pub enum Command {
         #[arg(long)]
         fetch: bool,
         /// merge to a customer branch instead of main
-        #[arg(short, long)]
+        #[arg(long)]
         customer: Option<String>,
         /// bump version: "minor" or "patch"
         #[arg(long)]
@@ -152,13 +152,13 @@ pub enum FeatureAction {
         base: Option<String>,
         #[arg(long)]
         fetch: bool,
-        #[arg(short, long)]
+        #[arg(long)]
         customer: Option<String>,
     },
     /// Finish a feature branch
     Finish {
         name: Option<String>,
-        #[arg(short, long)]
+        #[arg(long)]
         customer: Option<String>,
         #[arg(long)]
         keep: bool,
@@ -223,13 +223,13 @@ pub enum ReleaseAction {
         base: Option<String>,
         #[arg(long)]
         fetch: bool,
-        #[arg(short, long)]
+        #[arg(long)]
         customer: Option<String>,
     },
     /// Finish a release branch
     Finish {
         name: Option<String>,
-        #[arg(short, long)]
+        #[arg(long)]
         customer: Option<String>,
         #[arg(long)]
         keep: bool,
@@ -296,13 +296,13 @@ pub enum HotfixAction {
         base: Option<String>,
         #[arg(long)]
         fetch: bool,
-        #[arg(short, long)]
+        #[arg(long)]
         customer: Option<String>,
     },
     /// Finish a hotfix branch
     Finish {
         name: Option<String>,
-        #[arg(short, long)]
+        #[arg(long)]
         customer: Option<String>,
         #[arg(long)]
         keep: bool,
@@ -411,7 +411,7 @@ pub enum GeneralAction {
     Start {
         name: String,
         /// Source customer name
-        #[arg(short, long)]
+        #[arg(long)]
         customer: String,
         /// Target merge branch (e.g. main or other-customer)
         #[arg(short, long)]

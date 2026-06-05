@@ -95,6 +95,11 @@ pub fn sync_customer(
 
     let customer_branch = format!("customer/{}", customer_name);
 
+    // -- save original branch for workspace restoration --
+    let original_branch = git
+        .current_branch()
+        .unwrap_or_else(|_| main_branch.to_string());
+
     // -- validate --
     let branches = match git.get_local_branches() {
         Err(err) => {
@@ -123,7 +128,22 @@ pub fn sync_customer(
         match git.rebase(main_branch) {
             Err(err) => {
                 finish(false, &err.to_string());
-                Echo::info("resolve conflicts, then run `gitflow continue`");
+                // Save state so `gitflow continue` can resume after conflict resolution
+                let state = crate::command::state::GitflowState::Sync {
+                    customer_branch: customer_branch.clone(),
+                    main_branch: main_branch.to_string(),
+                    rebase: true,
+                    push,
+                    remote: remote.map(|s| s.to_string()),
+                    original_branch,
+                };
+                if let Err(save_err) = state.save(&git) {
+                    Echo::error(format!("Failed to save gitflow state: {}", save_err));
+                } else {
+                    Echo::info(
+                        "Gitflow state saved. Resolve the conflict and run 'gitflow continue'.",
+                    );
+                }
                 return;
             }
             Ok(_) => finish(
@@ -136,7 +156,22 @@ pub fn sync_customer(
         match git.merge(main_branch, None) {
             Err(err) => {
                 finish(false, &err.to_string());
-                Echo::info("resolve conflicts, then run `gitflow continue`");
+                // Save state so `gitflow continue` can resume after conflict resolution
+                let state = crate::command::state::GitflowState::Sync {
+                    customer_branch: customer_branch.clone(),
+                    main_branch: main_branch.to_string(),
+                    rebase: false,
+                    push,
+                    remote: remote.map(|s| s.to_string()),
+                    original_branch,
+                };
+                if let Err(save_err) = state.save(&git) {
+                    Echo::error(format!("Failed to save gitflow state: {}", save_err));
+                } else {
+                    Echo::info(
+                        "Gitflow state saved. Resolve the conflict and run 'gitflow continue'.",
+                    );
+                }
                 return;
             }
             Ok(_) => finish(
@@ -156,6 +191,8 @@ pub fn sync_customer(
             match git.push_branch(remote_name, &customer_branch, &customer_branch) {
                 Err(err) => {
                     finish(false, &err.to_string());
+                    // Still restore the original branch even if push fails
+                    let _ = git.switch(&original_branch);
                     return;
                 }
                 Ok(_) => finish(
@@ -166,6 +203,16 @@ pub fn sync_customer(
                     ),
                 ),
             }
+        }
+    }
+
+    // -- restore original branch --
+    if original_branch != customer_branch {
+        if let Err(err) = git.switch(&original_branch) {
+            Echo::error(format!(
+                "Failed to restore original branch '{}': {}",
+                original_branch, err
+            ));
         }
     }
 
@@ -190,6 +237,8 @@ pub fn sync_all_customers(
         }
         Ok(git) => git,
     };
+
+    let original_branch = git.current_branch().unwrap_or_else(|_| "main".to_string());
 
     // -- get all customer branches --
     let branches = match git.get_local_branches() {
@@ -327,6 +376,14 @@ pub fn sync_all_customers(
         println!();
         Echo::info("Hint: To manually resolve failed branches, run:");
         Echo::info("  gitflow custom sync <branch_name> [--rebase]");
+    }
+
+    // -- restore original branch --
+    if let Err(err) = git.switch(&original_branch) {
+        Echo::error(format!(
+            "Failed to restore original branch '{}': {}",
+            original_branch, err
+        ));
     }
 }
 

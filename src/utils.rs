@@ -1,4 +1,8 @@
-use std::{path::PathBuf, process};
+use std::{
+    io::{self, Write},
+    path::PathBuf,
+    process,
+};
 
 use anyhow::{bail, Result};
 use regex::Regex;
@@ -69,8 +73,17 @@ pub fn get_branch_type_name(
         pattern = pattern.replace("{{FIX}}", ".*");
         pattern = pattern.replace("{FIX}", ".*");
 
-        let regex = Regex::new(&format!("^{}$", pattern)).unwrap();
-        regex.is_match(&branch_name)
+        // ISSUE-UT1: Handle invalid regex in config gracefully
+        match Regex::new(&format!("^{}$", pattern)) {
+            Ok(regex) => regex.is_match(&branch_name),
+            Err(e) => {
+                Echo::error(format!(
+                    "Invalid regex pattern '{}' in config: {}",
+                    pattern, e
+                ));
+                false
+            }
+        }
     });
     match target_branch_type {
         None => bail!("no matched branch type"),
@@ -115,6 +128,27 @@ pub fn run_hook(
         ));
         return Ok(());
     }
+
+    // -- prompt user for confirmation if stdin is a terminal --
+    use std::io::IsTerminal;
+    if std::io::stdin().is_terminal() {
+        print!(
+            "Do you want to run the hook command '{} {}'? [y/N]: ",
+            command.command,
+            args.join(" ")
+        );
+        let _ = io::stdout().flush();
+        let mut input = String::new();
+        if io::stdin().read_line(&mut input).is_ok() {
+            let trimmed = input.trim().to_lowercase();
+            if trimmed != "y" && trimmed != "yes" {
+                bail!("Hook execution declined by user");
+            }
+        } else {
+            bail!("Failed to read user input");
+        }
+    }
+
     let finish = Echo::progress(&msg);
 
     // -- run --

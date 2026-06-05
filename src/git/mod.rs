@@ -28,6 +28,10 @@ impl Git {
             repo: RefCell::new(repo),
         }
     }
+
+    pub fn git_dir(&self) -> std::path::PathBuf {
+        self.repo.borrow().path().to_path_buf()
+    }
 }
 
 // # status
@@ -201,51 +205,46 @@ impl Git {
             return Ok(());
         }
         let repo = self.repo.borrow();
-        let source_ref = repo.find_branch(source_branch, git2::BranchType::Local)?;
-        let source_oid = source_ref.get().target().unwrap();
-        let source_commit = repo.find_commit(source_oid)?;
-        let source_tree = source_commit.tree()?;
-
-        let head_commit = repo.head()?.peel_to_commit()?;
-        let head_tree = head_commit.tree()?;
-
-        let ancestor = repo.merge_base(head_commit.id(), source_oid)?;
-        let ancestor_commit = repo.find_commit(ancestor)?;
-        let ancestor_tree = ancestor_commit.tree()?;
-
-        let merge_opts = git2::MergeOptions::new();
-        let mut index =
-            repo.merge_trees(&ancestor_tree, &head_tree, &source_tree, Some(&merge_opts))?;
-
-        if index.has_conflicts() {
-            bail!("squash merge conflict detected, resolve manually");
+        let workdir = repo
+            .workdir()
+            .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
+        let output = std::process::Command::new("git")
+            .args(["merge", "--squash", source_branch])
+            .current_dir(workdir)
+            .output()?;
+        if !output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let mut index = repo.index()?;
+            let _ = index.read(true); // Force reload index from disk
+            if index.has_conflicts() {
+                bail!(
+                    "squash merge conflict detected, resolve manually\n{}",
+                    stdout.trim()
+                );
+            } else {
+                bail!(
+                    "squash merge failed:\nstdout: {}\nstderr: {}",
+                    stdout.trim(),
+                    stderr.trim()
+                );
+            }
         }
 
-        let result_tree = repo.find_tree(index.write_tree_to(&repo)?)?;
-        let sig = repo.signature()?;
+        // Merge succeeded, commit the squash
         let msg = custom_msg
             .map(|m| m.to_string())
             .unwrap_or_else(|| format!("Squash merge branch '{}'", source_branch));
-        repo.commit(
-            Some("HEAD"),
-            &sig,
-            &sig,
-            &msg,
-            &result_tree,
-            &[&head_commit],
-        )?;
 
-        // Update active index to the result tree
-        let mut repo_index = repo.index()?;
-        repo_index.read_tree(&result_tree)?;
-        repo_index.write()?;
+        let commit_output = std::process::Command::new("git")
+            .args(["commit", "-m", &msg])
+            .current_dir(workdir)
+            .output()?;
+        if !commit_output.status.success() {
+            let stderr = String::from_utf8_lossy(&commit_output.stderr);
+            bail!("squash merge commit failed: {}", stderr.trim());
+        }
 
-        // Checkout the result tree to update the worktree
-        let mut checkout_opts = CheckoutBuilder::new();
-        checkout_opts.force();
-        repo.checkout_head(Some(&mut checkout_opts))?;
-
-        repo.cleanup_state()?;
         Ok(())
     }
 }
@@ -350,6 +349,20 @@ impl Git {
 // # stash & conflict state
 #[allow(dead_code)]
 impl Git {
+    pub fn workdir(&self) -> Result<std::path::PathBuf> {
+        let repo = self.repo.borrow();
+        let path = repo
+            .workdir()
+            .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
+        Ok(path.to_path_buf())
+    }
+
+    pub fn has_conflicts(&self) -> Result<bool> {
+        let repo = self.repo.borrow();
+        let index = repo.index()?;
+        Ok(index.has_conflicts())
+    }
+
     /// Check if there are uncommitted changes in the working directory.
     pub fn has_uncommitted_changes(&self) -> Result<bool> {
         let repo = self.repo.borrow();

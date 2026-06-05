@@ -1,8 +1,10 @@
-use anyhow::{bail, Result};
-use regex::Regex;
+use anyhow::Result;
+
+use serde::{Deserialize, Serialize};
 
 use crate::{
     config::definition::{BranchType, Strategy, TargetBranch},
+    config::read::read_config,
     echo::Echo,
     git::Git,
     rules::{validate_merge_allowed, validate_strategy},
@@ -10,6 +12,7 @@ use crate::{
 };
 
 #[allow(dead_code)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FinishOptions {
     pub keep: bool,
     pub tag: Option<String>,
@@ -26,13 +29,27 @@ pub struct FinishOptions {
     pub cleanup_customer: bool,
 }
 
-pub fn finish_task(branch_name: String, branch_type: BranchType, opts: FinishOptions) {
+pub fn finish_task(
+    branch_name: String,
+    branch_type: BranchType,
+    opts: FinishOptions,
+    config_path: Option<std::path::PathBuf>,
+) {
     let git = match Git::open() {
         Err(err) => {
             Echo::error(err.to_string());
             return;
         }
         Ok(git) => git,
+    };
+
+    // -- load all branch types for safety rule validation --
+    let all_branch_types = match read_config(config_path) {
+        Ok(cfg) => cfg.branch_types,
+        Err(err) => {
+            Echo::error(format!("Failed to read config: {}", err));
+            return;
+        }
     };
 
     // -- fetch source branch if requested --
@@ -84,7 +101,17 @@ pub fn finish_task(branch_name: String, branch_type: BranchType, opts: FinishOpt
     let mut target_branches = Vec::<TargetBranch>::new();
     branches.iter().for_each(|x| {
         for y in branch_type.to.iter() {
-            let regex = Regex::new(&y.name).unwrap();
+            // ISSUE-F2: Handle invalid regex gracefully instead of panicking
+            let regex = match regex::Regex::new(&y.name) {
+                Ok(r) => r,
+                Err(e) => {
+                    Echo::error(format!(
+                        "Invalid regex in target branch config '{}': {}",
+                        y.name, e
+                    ));
+                    continue;
+                }
+            };
             if regex.is_match(x) {
                 target_branches.push(TargetBranch {
                     name: x.to_string(),
@@ -102,29 +129,83 @@ pub fn finish_task(branch_name: String, branch_type: BranchType, opts: FinishOpt
     });
 
     // -- resolve target branches --
-    if resolve_target_branches(&git, &branch_name, &target_branches, &branch_type, &opts).is_err() {
+    if resolve_target_branches(
+        &git,
+        &branch_name,
+        &target_branches,
+        &target_branches,
+        &branch_type,
+        &opts,
+        &all_branch_types,
+    )
+    .is_err()
+    {
         return;
     }
 
+    // -- complete remainder of finish flow --
+    complete_finish_flow(
+        &git,
+        &branch_name,
+        &branch_type,
+        &opts,
+        &target_branches,
+        false,
+    );
+}
+
+pub fn complete_finish_flow(
+    git: &Git,
+    branch_name: &str,
+    branch_type: &BranchType,
+    opts: &FinishOptions,
+    target_branches: &[TargetBranch],
+    is_continue: bool,
+) {
+    use std::io::Write;
+
     // -- push target branches if configured or requested --
     if opts.push {
-        push_target_branches(&git, &branch_type, &target_branches);
+        push_target_branches(git, branch_type, target_branches);
     }
 
     // -- create tag if requested or if --bump is specified --
     if opts.tag.is_some() || opts.bump.is_some() {
-        create_finish_tag(&git, &branch_name, &branch_type, &opts);
+        create_finish_tag(git, branch_name, branch_type, opts);
     }
 
-    // -- delete branch (unless --keep) --
+    // ISSUE-F5 fix: In non-interactive environments (CI/piped), default to deleting the branch.
+    // In interactive terminals, prompt the user if is_continue.
     if !opts.keep {
-        let finish = Echo::progress(format!("delete branch {}", &branch_name));
-        match git.del_local_branch(&branch_name) {
-            Err(err) => {
-                finish(false, &err.to_string());
-                return;
+        use std::io::IsTerminal;
+        let should_delete = if is_continue && std::io::stdin().is_terminal() {
+            print!(
+                "Do you want to delete the source branch '{}'? [y/N]: ",
+                branch_name
+            );
+            let _ = std::io::stdout().flush();
+            let mut input = String::new();
+            if std::io::stdin().read_line(&mut input).is_ok() {
+                let trimmed = input.trim().to_lowercase();
+                trimmed == "y" || trimmed == "yes"
+            } else {
+                false
             }
-            Ok(_) => finish(true, &format!("delete branch {}", &branch_name)),
+        } else {
+            // Non-interactive: always delete (unless --keep was specified)
+            true
+        };
+
+        if should_delete {
+            let finish = Echo::progress(format!("delete branch {}", &branch_name));
+            match git.del_local_branch(branch_name) {
+                Err(err) => {
+                    finish(false, &err.to_string());
+                }
+                Ok(_) => finish(true, &format!("delete branch {}", &branch_name)),
+            }
+        } else {
+            Echo::info(format!("keeping branch {}", &branch_name));
         }
     } else {
         Echo::info(format!("keeping branch {}", &branch_name));
@@ -132,7 +213,7 @@ pub fn finish_task(branch_name: String, branch_type: BranchType, opts: FinishOpt
 
     // -- run after finish hook --
     if !opts.no_verify {
-        let _ = run_hook(branch_type.after_finish.clone(), &branch_name, &branch_type);
+        let _ = run_hook(branch_type.after_finish.clone(), branch_name, branch_type);
     }
 
     // -- auto cleanup customer branch if requested --
@@ -183,42 +264,60 @@ pub fn finish_task(branch_name: String, branch_type: BranchType, opts: FinishOpt
     }
 }
 
-fn resolve_target_branches(
+pub fn resolve_target_branches(
     git: &Git,
     branch_name: &str,
-    target_branches: &[TargetBranch],
+    full_target_branches: &[TargetBranch],
+    remaining_targets: &[TargetBranch],
     branch_type: &BranchType,
     opts: &FinishOptions,
+    all_branch_types: &[BranchType],
 ) -> Result<()> {
     // Infer main branch: for feature/hotfix types, the `from` field is typically "main"
     let main_branch = infer_main_branch(branch_type);
 
-    for x in target_branches.iter() {
-        // Safety: check if merge is allowed
+    for (i, x) in remaining_targets.iter().enumerate() {
+        // Safety: check if merge is allowed (using config-derived rules)
         if let Some(ref main) = main_branch {
-            if let Err(err) = validate_merge_allowed(branch_name, &x.name, main) {
+            if let Err(err) = validate_merge_allowed(branch_name, &x.name, main, all_branch_types) {
                 Echo::error(err.to_string());
-                bail!("");
+                return Err(err);
             }
             if let Err(err) = validate_strategy(branch_name, &x.name, &x.strategy, main) {
                 Echo::error(err.to_string());
-                bail!("");
+                return Err(err);
             }
         }
 
-        match x.strategy {
-            Strategy::Merge => {
-                merge(git, branch_name, &x.name, opts.merge_message.as_deref())?;
-            }
-            Strategy::Rebase => {
-                rebase(git, branch_name, &x.name)?;
-            }
-            Strategy::CherryPick => {
-                cherry_pick(git, branch_name, &x.name)?;
-            }
+        let res = match x.strategy {
+            Strategy::Merge => merge(git, branch_name, &x.name, opts.merge_message.as_deref()),
+            Strategy::Rebase => rebase(git, branch_name, &x.name),
+            Strategy::CherryPick => cherry_pick(git, branch_name, &x.name),
             Strategy::Squash => {
-                squash_merge(git, branch_name, &x.name, opts.squash_message.as_deref())?;
+                squash_merge(git, branch_name, &x.name, opts.squash_message.as_deref())
             }
+        };
+
+        if let Err(err) = res {
+            let err_str = err.to_string();
+            if err_str.contains("conflict") {
+                // Save state!
+                let state = crate::command::state::GitflowState::Finish {
+                    branch_name: branch_name.to_string(),
+                    branch_type: branch_type.clone(),
+                    opts: opts.clone(),
+                    target_branches: full_target_branches.to_vec(),
+                    remaining_targets: remaining_targets[i..].to_vec(),
+                };
+                if let Err(save_err) = state.save(git) {
+                    Echo::error(format!("Failed to save gitflow state: {}", save_err));
+                } else {
+                    Echo::info(
+                        "Gitflow state saved. Resolve the conflict and run 'gitflow continue'.",
+                    );
+                }
+            }
+            return Err(err);
         }
     }
     Ok(())
@@ -258,7 +357,7 @@ fn merge(
     let result = git.switch(target_branch);
     if let Err(err) = result {
         finish(false, &err.to_string());
-        bail!("");
+        return Err(err);
     }
 
     let custom_msg =
@@ -266,7 +365,7 @@ fn merge(
     let result = git.merge(source_branch, custom_msg.as_deref());
     if let Err(err) = result {
         finish(false, &err.to_string());
-        bail!("");
+        return Err(err);
     }
 
     finish(
@@ -282,13 +381,13 @@ fn rebase(git: &Git, source_branch: &str, target_branch: &str) -> Result<()> {
     let result = git.switch(target_branch);
     if let Err(err) = result {
         finish(false, &err.to_string());
-        bail!("");
+        return Err(err);
     }
 
     let result = git.rebase(source_branch);
     if let Err(err) = result {
         finish(false, &err.to_string());
-        bail!("");
+        return Err(err);
     }
 
     finish(
@@ -302,7 +401,7 @@ fn cherry_pick(git: &Git, source_branch: &str, target_branch: &str) -> Result<()
     let commits = match git.diff_commits(source_branch, target_branch) {
         Err(err) => {
             Echo::error(err.to_string());
-            bail!("");
+            return Err(err);
         }
         Ok(commits_v) => commits_v,
     };
@@ -325,13 +424,13 @@ fn cherry_pick(git: &Git, source_branch: &str, target_branch: &str) -> Result<()
     let result = git.switch(target_branch);
     if let Err(err) = result {
         finish(false, &err.to_string());
-        bail!("");
+        return Err(err);
     }
 
     let result = git.cherry_pick(commits);
     if let Err(err) = result {
         finish(false, &err.to_string());
-        bail!("");
+        return Err(err);
     }
 
     finish(true, &msg);
@@ -352,7 +451,7 @@ fn squash_merge(
     let result = git.switch(target_branch);
     if let Err(err) = result {
         finish(false, &err.to_string());
-        bail!("");
+        return Err(err);
     }
 
     let custom_msg =
@@ -360,7 +459,7 @@ fn squash_merge(
     let result = git.squash_merge(source_branch, custom_msg.as_deref());
     if let Err(err) = result {
         finish(false, &err.to_string());
-        bail!("");
+        return Err(err);
     }
 
     finish(
@@ -377,8 +476,9 @@ fn push_target_branches(git: &Git, branch_type: &BranchType, target_branches: &[
     };
 
     for tb in target_branches {
-        // Check if this target has push enabled, or if --push was used (push all)
-        let should_push = tb.push.unwrap_or(true); // --push pushes all targets
+        // ISSUE-F1: Default to NOT pushing if the `push` field is not explicitly set.
+        // Previously used unwrap_or(true) which could silently push unintended branches.
+        let should_push = tb.push.unwrap_or(false);
         if should_push {
             let finish = Echo::progress(format!("push {} to {}", tb.name, remote));
             match git.push_branch(&remote, &tb.name, &tb.name) {
@@ -410,8 +510,9 @@ fn create_finish_tag(git: &Git, branch_name: &str, branch_type: &BranchType, opt
             let short_name = branch_name.strip_prefix(&prefix).unwrap_or(branch_name);
             match &branch_type.tag_pattern {
                 Some(p) => p
-                    .replace("{NAME}", short_name)
-                    .replace("{{NAME}}", short_name),
+                    // ISSUE-F3: Replace {{NAME}} BEFORE {NAME} to avoid partial double-brace substitution
+                    .replace("{{NAME}}", short_name)
+                    .replace("{NAME}", short_name),
                 None => short_name.to_string(),
             }
         }
