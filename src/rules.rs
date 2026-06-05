@@ -144,10 +144,25 @@ pub fn validate_merge_allowed(
             format!("generalize/customer-{}/", target_customer),
         ];
 
-        if !allowed_prefixes.iter().any(|p| branch_name.starts_with(p)) {
+        let mut allowed = allowed_prefixes.iter().any(|p| branch_name.starts_with(p));
+
+        if !allowed && branch_name.starts_with("release/") {
+            if let Ok(Some(cust)) = git.get_branch_config(branch_name, "gitflow-customer") {
+                if cust == target_customer {
+                    allowed = true;
+                }
+            } else {
+                // Fallback: check if the release branch name contains target_customer
+                if branch_name.contains(target_customer) {
+                    allowed = true;
+                }
+            }
+        }
+
+        if !allowed {
             bail!(
                 "safety rule: branch '{}' is not allowed to merge to customer branch '{}'. \
-                 Only its corresponding customer-specific feature, hotfix, or general branches can merge here.",
+                 Only its corresponding customer-specific feature, hotfix, release, or general branches can merge here.",
                 branch_name,
                 target_branch
             );

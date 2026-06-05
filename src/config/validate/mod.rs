@@ -61,20 +61,18 @@ fn create_is_valid(config: &Config) -> Result<()> {
         .branch_types
         .iter()
         .filter(|x| {
-            x.create
-                .match_indices(BRANCH_NAME_PLACEHOLDER)
-                .map(|x| x.1.to_string())
-                .collect::<Vec<String>>()
-                .len()
-                != 1
+            if x.name == "customer-release" {
+                x.create.match_indices("{RELEASE}").count() != 1
+            } else {
+                x.create.match_indices(BRANCH_NAME_PLACEHOLDER).count() != 1
+            }
         })
         .map(|x| format!("{}: {}", x.name, x.create))
         .collect::<Vec<String>>();
 
     if !invalid_creates.is_empty() {
         bail!(
-            "These branch_types have invalid 'create' which should include only one {}:\n{}",
-            BRANCH_NAME_PLACEHOLDER,
+            "These branch_types have invalid 'create' templates:\n{}",
             invalid_creates.join("\n")
         )
     }

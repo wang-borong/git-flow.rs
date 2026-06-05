@@ -48,6 +48,15 @@ fn git(dir: &std::path::Path, args: &[&str]) {
         .unwrap();
 }
 
+fn git_branch_config(dir: &std::path::Path, branch: &str, key: &str) -> String {
+    let out = Command::new("git")
+        .args(["config", &format!("branch.{}.{}", branch, key)])
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
 fn git_current_branch(dir: &std::path::Path) -> String {
     let out = Command::new("git")
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
@@ -1330,4 +1339,101 @@ customer_sync_strategy = "merge"
         .unwrap();
     let log_main_str = String::from_utf8_lossy(&log_main.stdout).to_string();
     assert!(!log_main_str.contains("Squash merge branch 'generalize/customer-huawei/pick-y'"));
+}
+
+// ============================================================
+// T22: YQM Customer Release Flow and Auto-Detection
+// ============================================================
+#[test]
+fn test_yqm_customer_release_flow() {
+    let td = setup_test_repo();
+    let path = td.path();
+
+    // Ensure we are on main branch before creating YQM config
+    git(path, &["checkout", "main"]);
+
+    // Create a YQM config
+    let config = r#"
+[branches]
+main = "main"
+customer = { prefix = "customer/" }
+generalize = { prefix = "generalize/" }
+release = { prefix = "release/" }
+
+[merge]
+default_strategy = "squash"
+release_strategy = "merge"
+customer_sync_strategy = "merge"
+"#;
+    fs::write(path.join(".gitflow.toml"), config).unwrap();
+    git(path, &["add", ".gitflow.toml"]);
+    git(path, &["commit", "-m", "yqm config"]);
+
+    // Create customer branch
+    git(path, &["checkout", "main"]);
+    run_gitflow_success(path, &["custom", "start", "ali"]);
+
+    // Make a commit on main to diverge it
+    git(path, &["checkout", "main"]);
+    fs::write(path.join("main_diverge.txt"), "main").unwrap();
+    git(path, &["add", "main_diverge.txt"]);
+    git(path, &["commit", "-m", "main diverge"]);
+
+    // Checkout customer/ali and make a commit on it to diverge it
+    git(path, &["checkout", "customer/ali"]);
+    fs::write(path.join("ali_diverge.txt"), "ali").unwrap();
+    git(path, &["add", "ali_diverge.txt"]);
+    git(path, &["commit", "-m", "ali diverge"]);
+
+    // Start release WITHOUT --customer option - should auto-detect "ali"
+    run_gitflow_success(path, &["release", "start", "ali-v1.0"]);
+
+    let current = git_current_branch(path);
+    assert_eq!(current, "release/ali-v1.0");
+
+    // Verify the release branch was created from customer/ali (inherits ali_diverge.txt but not main_diverge.txt)
+    assert!(
+        path.join("ali_diverge.txt").exists(),
+        "Release branch did not start from customer branch"
+    );
+    assert!(
+        !path.join("main_diverge.txt").exists(),
+        "Release branch incorrectly started from main branch"
+    );
+
+    // Verify metadata was stored
+    let stored_cust = git_branch_config(path, "release/ali-v1.0", "gitflow-customer");
+    assert_eq!(stored_cust, "ali");
+
+    // Commit release-prep work
+    fs::write(path.join("release_prep.txt"), "prep").unwrap();
+    git(path, &["add", "release_prep.txt"]);
+    git(path, &["commit", "-m", "release prep ali v1.0"]);
+
+    // Finish release - should merge back into customer/ali instead of main
+    run_gitflow_success(path, &["release", "finish"]);
+
+    // Verify release branch was deleted
+    let branches = git_branches(path);
+    assert!(!branches.contains("release/ali-v1.0"));
+
+    // Verify it merged back to customer/ali
+    git(path, &["checkout", "customer/ali"]);
+    let log_ali = Command::new("git")
+        .args(["log", "--oneline"])
+        .current_dir(path)
+        .output()
+        .unwrap();
+    let log_ali_str = String::from_utf8_lossy(&log_ali.stdout).to_string();
+    assert!(log_ali_str.contains("Merge branch 'release/ali-v1.0'"));
+
+    // Verify it did NOT merge to main
+    git(path, &["checkout", "main"]);
+    let log_main = Command::new("git")
+        .args(["log", "--oneline"])
+        .current_dir(path)
+        .output()
+        .unwrap();
+    let log_main_str = String::from_utf8_lossy(&log_main.stdout).to_string();
+    assert!(!log_main_str.contains("release prep ali v1.0"));
 }

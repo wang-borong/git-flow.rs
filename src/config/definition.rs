@@ -42,6 +42,8 @@ impl BranchType {
         pattern = pattern.replace("{FEATURE}", "(?P<feature>[^/]+)");
         pattern = pattern.replace("{{FIX}}", "(?P<fix>[^/]+)");
         pattern = pattern.replace("{FIX}", "(?P<fix>[^/]+)");
+        pattern = pattern.replace("{{RELEASE}}", "(?P<release>[^/]+)");
+        pattern = pattern.replace("{RELEASE}", "(?P<release>[^/]+)");
 
         let re = match regex::Regex::new(&format!("^{}$", pattern)) {
             Ok(r) => r,

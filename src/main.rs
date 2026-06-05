@@ -29,7 +29,7 @@ fn resolve_start_branch(
 
     let target_type_name = match customer {
         Some(_) => {
-            if type_name == "feature" || type_name == "hotfix" {
+            if type_name == "feature" || type_name == "hotfix" || type_name == "release" {
                 format!("customer-{}", type_name)
             } else {
                 type_name.to_string()
@@ -90,12 +90,30 @@ fn resolve_start_branch(
                     .replace("{CUSTOMER}", cust);
             }
         }
+
+        // Always support {{CUSTOMER}} / {CUSTOMER} replacements if customer is specified,
+        // even if target_type_name starts with "customer-"
+        branch_name = branch_name
+            .replace("{{CUSTOMER}}", cust)
+            .replace("{CUSTOMER}", cust);
+        branch_type.from = branch_type
+            .from
+            .replace("{{CUSTOMER}}", cust)
+            .replace("{CUSTOMER}", cust);
+        for to_branch in &mut branch_type.to {
+            to_branch.name = to_branch
+                .name
+                .replace("{{CUSTOMER}}", cust)
+                .replace("{CUSTOMER}", cust);
+        }
     }
 
     // Replace branch name placeholder
     branch_name = branch_name
         .replace("{{FEATURE}}", name)
         .replace("{{FIX}}", name)
+        .replace("{{RELEASE}}", name)
+        .replace("{RELEASE}", name)
         .replace("{{NAME}}", name)
         .replace("{NAME}", name);
 
@@ -138,7 +156,8 @@ fn resolve_branch_info(
             } else {
                 let target_type_name = match &customer_opt {
                     Some(_) => {
-                        if type_name == "feature" || type_name == "hotfix" {
+                        if type_name == "feature" || type_name == "hotfix" || type_name == "release"
+                        {
                             format!("customer-{}", type_name)
                         } else {
                             type_name.to_string()
@@ -168,6 +187,8 @@ fn resolve_branch_info(
                 template
                     .replace("{{FEATURE}}", &name)
                     .replace("{{FIX}}", &name)
+                    .replace("{{RELEASE}}", &name)
+                    .replace("{RELEASE}", &name)
                     .replace("{{NAME}}", &name)
                     .replace("{NAME}", &name)
             }
@@ -178,6 +199,33 @@ fn resolve_branch_info(
     let mut sorted_bts = config.branch_types.clone();
     sorted_bts.sort_by_key(|b| std::cmp::Reverse(b.create.len()));
 
+    let mut customer_val = customer_opt.clone();
+    if customer_val.is_none() {
+        if let Ok(Some(cust)) = git.get_branch_config(&full_branch_name, "gitflow-customer") {
+            customer_val = Some(cust);
+        } else {
+            // Fallback: search for customer name in branch name
+            if let Ok(branches) = git.get_local_branches() {
+                let customer_prefix = config
+                    .branch_types
+                    .iter()
+                    .find(|b| b.name == "customer-feature")
+                    .map(|b| b.from.replace("{{NAME}}", ""))
+                    .unwrap_or_else(|| "customer/".to_string());
+                for b in branches {
+                    if b.starts_with(&customer_prefix) {
+                        if let Some(cust) = b.strip_prefix(&customer_prefix) {
+                            if !cust.is_empty() && full_branch_name.contains(cust) {
+                                customer_val = Some(cust.to_string());
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     for bt in &sorted_bts {
         let mut pattern = bt.create.clone();
         pattern = pattern.replace("{{NAME}}", ".*");
@@ -185,12 +233,16 @@ fn resolve_branch_info(
         pattern = pattern.replace("{{CUSTOMER}}", ".*");
         pattern = pattern.replace("{CUSTOMER}", ".*");
         pattern = pattern.replace("{{FEATURE}}", ".*");
+        pattern = pattern.replace("{FEATURE}", ".*");
         pattern = pattern.replace("{{FIX}}", ".*");
+        pattern = pattern.replace("{FIX}", ".*");
+        pattern = pattern.replace("{{RELEASE}}", ".*");
+        pattern = pattern.replace("{RELEASE}", ".*");
 
         let re = Regex::new(&format!("^{}$", pattern))?;
         if re.is_match(&full_branch_name) {
             let mut resolved_bt = bt.clone();
-            resolved_bt.resolve_customer(&full_branch_name, customer_opt.as_deref());
+            resolved_bt.resolve_customer(&full_branch_name, customer_val.as_deref());
             if resolved_bt.name == "general" {
                 if let Ok(Some(to_val)) =
                     git.get_branch_config(&full_branch_name, "gitflow-general-to")
@@ -205,9 +257,9 @@ fn resolve_branch_info(
         }
     }
 
-    let target_type_name = match &customer_opt {
+    let target_type_name = match &customer_val {
         Some(_) => {
-            if type_name == "feature" || type_name == "hotfix" {
+            if type_name == "feature" || type_name == "hotfix" || type_name == "release" {
                 format!("customer-{}", type_name)
             } else {
                 type_name.to_string()
@@ -224,7 +276,7 @@ fn resolve_branch_info(
         })?;
 
     let mut resolved_bt = bt.clone();
-    resolved_bt.resolve_customer(&full_branch_name, customer_opt.as_deref());
+    resolved_bt.resolve_customer(&full_branch_name, customer_val.as_deref());
     if resolved_bt.name == "general" {
         if let Ok(Some(to_val)) = git.get_branch_config(&full_branch_name, "gitflow-general-to") {
             resolved_bt.from = to_val.clone();
@@ -282,7 +334,13 @@ async fn main() {
                             if let Some(ref b) = base {
                                 bt.from = b.clone();
                             }
-                            command::start::start_task(branch_name, bt, *fetch, None, None);
+                            command::start::start_task(
+                                branch_name,
+                                bt,
+                                *fetch,
+                                None,
+                                customer_to_use,
+                            );
                         }
                     }
                 }
@@ -479,7 +537,13 @@ async fn main() {
                             if let Some(ref b) = base {
                                 bt.from = b.clone();
                             }
-                            command::start::start_task(branch_name, bt, *fetch, None, None);
+                            command::start::start_task(
+                                branch_name,
+                                bt,
+                                *fetch,
+                                None,
+                                customer_to_use,
+                            );
                         }
                     }
                 }
@@ -670,7 +734,13 @@ async fn main() {
                             if let Some(ref b) = base {
                                 bt.from = b.clone();
                             }
-                            command::start::start_task(branch_name, bt, *fetch, None, None);
+                            command::start::start_task(
+                                branch_name,
+                                bt,
+                                *fetch,
+                                None,
+                                customer_to_use,
+                            );
                         }
                     }
                 }

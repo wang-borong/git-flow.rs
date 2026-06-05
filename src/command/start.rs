@@ -66,6 +66,9 @@ pub fn start_task(
         }
         Ok(_) => {
             finish(true, &format!("create new branch {}", &branch_name));
+            if let Some(ref src_cust) = source_customer {
+                let _ = git.set_branch_config(&branch_name, "gitflow-customer", src_cust);
+            }
             if branch_type.name == "general" {
                 if let Some(first_to) = branch_type.to.first() {
                     let _ =

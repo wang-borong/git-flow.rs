@@ -512,13 +512,16 @@ impl Git {
         let workdir = repo
             .workdir()
             .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
-        let output = std::process::Command::new("git")
-            .args(["rebase", "--continue"])
-            .current_dir(workdir)
-            .output()?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("rebase continue failed: {}", stderr.trim());
+        use std::io::IsTerminal;
+        let is_interactive = std::io::stdin().is_terminal();
+        let mut cmd = std::process::Command::new("git");
+        cmd.args(["rebase", "--continue"]).current_dir(workdir);
+        if !is_interactive {
+            cmd.env("GIT_EDITOR", "true");
+        }
+        let status = cmd.status()?;
+        if !status.success() {
+            bail!("rebase continue failed");
         }
         Ok(())
     }
@@ -554,13 +557,16 @@ impl Git {
         let workdir = repo
             .workdir()
             .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
-        let output = std::process::Command::new("git")
-            .args(["merge", "--continue"])
-            .current_dir(workdir)
-            .output()?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("merge continue failed: {}", stderr.trim());
+        use std::io::IsTerminal;
+        let is_interactive = std::io::stdin().is_terminal();
+        let mut cmd = std::process::Command::new("git");
+        cmd.args(["merge", "--continue"]).current_dir(workdir);
+        if !is_interactive {
+            cmd.env("GIT_EDITOR", "true");
+        }
+        let status = cmd.status()?;
+        if !status.success() {
+            bail!("merge continue failed");
         }
         Ok(())
     }
@@ -596,13 +602,16 @@ impl Git {
         let workdir = repo
             .workdir()
             .ok_or_else(|| anyhow::anyhow!("No workdir found"))?;
-        let output = std::process::Command::new("git")
-            .args(["cherry-pick", "--continue"])
-            .current_dir(workdir)
-            .output()?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("cherry-pick continue failed: {}", stderr.trim());
+        use std::io::IsTerminal;
+        let is_interactive = std::io::stdin().is_terminal();
+        let mut cmd = std::process::Command::new("git");
+        cmd.args(["cherry-pick", "--continue"]).current_dir(workdir);
+        if !is_interactive {
+            cmd.env("GIT_EDITOR", "true");
+        }
+        let status = cmd.status()?;
+        if !status.success() {
+            bail!("cherry-pick continue failed");
         }
         Ok(())
     }

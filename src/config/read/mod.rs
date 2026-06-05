@@ -62,7 +62,10 @@ pub fn read_config(config_path: Option<PathBuf>) -> Result<definition::Config> {
 
         for bt in &mut config.branch_types {
             let old_from = bt.from.clone();
-            let should_override = if let Some(ref base) = config.base_branch {
+            let is_customer_related = bt.name.starts_with("customer-") || bt.name == "general";
+            let should_override = if is_customer_related {
+                false
+            } else if let Some(ref base) = config.base_branch {
                 bt.from != *base
             } else {
                 bt.from != "main" && bt.from != "master"

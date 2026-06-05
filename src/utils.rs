@@ -72,6 +72,8 @@ pub fn get_branch_type_name(
         pattern = pattern.replace("{FEATURE}", ".*");
         pattern = pattern.replace("{{FIX}}", ".*");
         pattern = pattern.replace("{FIX}", ".*");
+        pattern = pattern.replace("{{RELEASE}}", ".*");
+        pattern = pattern.replace("{RELEASE}", ".*");
 
         // ISSUE-UT1: Handle invalid regex in config gracefully
         match Regex::new(&format!("^{}$", pattern)) {
@@ -89,7 +91,36 @@ pub fn get_branch_type_name(
         None => bail!("no matched branch type"),
         Some(target_branch_type_v) => {
             let mut resolved_bt = target_branch_type_v.clone();
-            resolved_bt.resolve_customer(&branch_name, None);
+
+            // Try to resolve customer using git config or fallback
+            let mut customer_val = None;
+            if let Ok(git) = Git::open() {
+                if let Ok(Some(cust)) = git.get_branch_config(&branch_name, "gitflow-customer") {
+                    customer_val = Some(cust);
+                } else {
+                    // Fallback detection from existing customer branches
+                    let customer_prefix = config
+                        .branch_types
+                        .iter()
+                        .find(|b| b.name == "customer-feature")
+                        .map(|b| b.from.replace("{{NAME}}", ""))
+                        .unwrap_or_else(|| "customer/".to_string());
+                    if let Ok(branches) = git.get_local_branches() {
+                        for b in branches {
+                            if b.starts_with(&customer_prefix) {
+                                if let Some(cust) = b.strip_prefix(&customer_prefix) {
+                                    if !cust.is_empty() && branch_name.contains(cust) {
+                                        customer_val = Some(cust.to_string());
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            resolved_bt.resolve_customer(&branch_name, customer_val.as_deref());
             Ok((branch_name, resolved_bt))
         }
     }

@@ -263,8 +263,30 @@ pub fn parse_yqm_config(toml_content: &str) -> Result<Config> {
                 before_rebase: None,
                 after_rebase: hook_cmd(&yqm.hooks.post_tag),
             });
-            // Customer release uses the same branch type with --customer flag
-            // at runtime (e.g. `git flow start v1.0-hw.1 release --customer huawei`)
+            // Customer release
+            branch_types.push(BranchType {
+                name: "customer-release".to_string(),
+                create: format!("{}{{RELEASE}}", release_config.prefix),
+                from: format!("{}{{CUSTOMER}}", customer_prefix),
+                to: vec![TargetBranch {
+                    name: format!("{}.*", customer_prefix),
+                    strategy: release_strategy.clone(),
+                    push: None,
+                    tag: Some(true),
+                }],
+                remote: None,
+                tag_pattern: Some("{{RELEASE}}".to_string()),
+                before_start: None,
+                after_start: None,
+                before_finish: None,
+                after_finish: hook_cmd(&yqm.hooks.post_finish),
+                before_drop: None,
+                after_drop: None,
+                before_publish: None,
+                after_publish: None,
+                before_rebase: None,
+                after_rebase: hook_cmd(&yqm.hooks.post_tag),
+            });
         }
     }
 
@@ -346,8 +368,7 @@ customer_sync_strategy = "merge"
 "#;
         let config = parse_yqm_config(toml).unwrap();
         assert!(config.branch_types.iter().any(|b| b.name == "release"));
-        // Customer release uses the same branch type with --customer flag at runtime
-        assert!(!config
+        assert!(config
             .branch_types
             .iter()
             .any(|b| b.name == "customer-release"));
@@ -360,6 +381,15 @@ customer_sync_strategy = "merge"
             .unwrap();
         assert!(matches!(release.to[0].strategy, Strategy::Merge));
         assert_eq!(release.to[0].tag, Some(true));
+
+        // Customer release should also use merge strategy
+        let customer_release = config
+            .branch_types
+            .iter()
+            .find(|b| b.name == "customer-release")
+            .unwrap();
+        assert!(matches!(customer_release.to[0].strategy, Strategy::Merge));
+        assert_eq!(customer_release.to[0].tag, Some(true));
     }
 
     #[test]
