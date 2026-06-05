@@ -249,10 +249,11 @@ async fn main() {
                     fetch,
                     customer,
                 } => {
+                    let customer_to_use = get_customer_or_detect(customer, args.config.clone());
                     match resolve_start_branch(
                         "feature",
                         name,
-                        customer.as_deref(),
+                        customer_to_use.as_deref(),
                         None,
                         args.config.clone(),
                     ) {
@@ -446,10 +447,11 @@ async fn main() {
                     fetch,
                     customer,
                 } => {
+                    let customer_to_use = get_customer_or_detect(customer, args.config.clone());
                     match resolve_start_branch(
                         "release",
                         name,
-                        customer.as_deref(),
+                        customer_to_use.as_deref(),
                         None,
                         args.config.clone(),
                     ) {
@@ -636,10 +638,11 @@ async fn main() {
                     fetch,
                     customer,
                 } => {
+                    let customer_to_use = get_customer_or_detect(customer, args.config.clone());
                     match resolve_start_branch(
                         "hotfix",
                         name,
-                        customer.as_deref(),
+                        customer_to_use.as_deref(),
                         None,
                         args.config.clone(),
                     ) {
@@ -996,10 +999,18 @@ async fn main() {
                     pick,
                     fetch,
                 } => {
+                    let customer_to_use = get_customer_or_detect(customer, args.config.clone());
+                    let customer_val = match customer_to_use {
+                        Some(cust) => cust,
+                        None => {
+                            Echo::error("error: --customer option is required when not on a customer branch.");
+                            return;
+                        }
+                    };
                     match resolve_start_branch(
                         "general",
                         name,
-                        Some(customer),
+                        Some(&customer_val),
                         Some(to),
                         args.config.clone(),
                     ) {
@@ -1408,6 +1419,39 @@ async fn main() {
                 target.clone(),
                 strategy.clone().unwrap_or(cli::SyncStrategy::Increment),
             );
+        }
+    }
+}
+
+fn detect_current_customer(config_path: Option<std::path::PathBuf>) -> Option<String> {
+    if let Ok(git) = Git::open() {
+        if let Ok(current_branch) = git.current_branch() {
+            let (_, customer_prefix, _) = read_yqm_branch_config(config_path);
+            if current_branch.starts_with(&customer_prefix) {
+                return current_branch
+                    .strip_prefix(&customer_prefix)
+                    .map(|s| s.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn get_customer_or_detect(
+    customer_opt: &Option<String>,
+    config_path: Option<std::path::PathBuf>,
+) -> Option<String> {
+    match customer_opt {
+        Some(c) => Some(c.clone()),
+        None => {
+            let detected = detect_current_customer(config_path);
+            if let Some(ref cust) = detected {
+                Echo::info(format!(
+                    "No --customer specified. Auto-detecting customer '{}' from current branch.",
+                    cust
+                ));
+            }
+            detected
         }
     }
 }

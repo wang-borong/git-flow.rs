@@ -412,7 +412,7 @@ pub enum GeneralAction {
         name: String,
         /// Source customer name
         #[arg(long)]
-        customer: String,
+        customer: Option<String>,
         /// Target merge branch (e.g. main or other-customer)
         #[arg(short, long)]
         to: String,

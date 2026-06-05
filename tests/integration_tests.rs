@@ -1039,3 +1039,43 @@ customer_sync_strategy = "merge"
     assert!(!log_ali.contains("huawei.txt"));
     assert!(!log_ali.contains("new-huawei-feat"));
 }
+
+// ============================================================
+// T20: YQM Customer Auto-Detection (Enables omitting --customer option when on customer branch)
+// ============================================================
+#[test]
+fn test_yqm_customer_auto_detection() {
+    let td = setup_test_repo();
+    let path = td.path();
+
+    // Ensure we are on main branch before creating YQM config
+    git(path, &["checkout", "main"]);
+
+    // Create a YQM config
+    let config = r#"
+[branches]
+main = "main"
+customer = { prefix = "customer/" }
+generalize = { prefix = "generalize/" }
+
+[merge]
+default_strategy = "squash"
+customer_sync_strategy = "merge"
+"#;
+    fs::write(path.join(".gitflow.toml"), config).unwrap();
+    git(path, &["add", ".gitflow.toml"]);
+    git(path, &["commit", "-m", "yqm config"]);
+
+    // Create customer branch
+    git(path, &["checkout", "main"]);
+    run_gitflow_success(path, &["custom", "start", "huawei"]);
+
+    // Checkout customer/huawei
+    git(path, &["checkout", "customer/huawei"]);
+
+    // Start feature WITHOUT --customer option - should auto-detect "huawei"
+    run_gitflow_success(path, &["feature", "start", "auto-feat"]);
+
+    let current = git_current_branch(path);
+    assert_eq!(current, "feature/customer-huawei/auto-feat");
+}
