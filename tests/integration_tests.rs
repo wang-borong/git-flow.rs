@@ -917,3 +917,125 @@ fn test_shorthand_rename() {
         branches
     );
 }
+
+// ============================================================
+// T18: SAFETY RULE — core branches (main/dev) cannot be deleted, finished, or renamed
+// ============================================================
+#[test]
+fn test_safety_core_branches_protected() {
+    let td = setup_test_repo();
+    let path = td.path();
+
+    // 1. Switch to 'dev' and try to delete without arguments (resolves to 'dev') — should fail
+    git(path, &["checkout", "dev"]);
+    let err_out = run_gitflow_failure(path, &["feature", "delete"]);
+    assert!(err_out.contains("refusing to delete core branch"));
+
+    // 2. Switch to 'main' and try to delete without arguments (resolves to 'main') — should fail
+    git(path, &["checkout", "main"]);
+    let err_out = run_gitflow_failure(path, &["feature", "delete"]);
+    assert!(err_out.contains("refusing to delete core branch"));
+
+    // 3. Try to finish current branch ('main') — should fail
+    let err_out = run_gitflow_failure(path, &["feature", "finish"]);
+    assert!(err_out.contains("refusing to finish core branch"));
+
+    // 4. Try to rename current branch ('main') to 'some-feat' — should fail
+    let err_out = run_gitflow_failure(path, &["feature", "rename", "some-feat"]);
+    assert!(err_out.contains("Current branch is not a feature branch"));
+
+    // 4b. Try to rename refs/heads/main explicitly — should fail with core branch protection
+    let err_out = run_gitflow_failure(path, &["feature", "rename", "refs/heads/main", "some-feat"]);
+    assert!(err_out.contains("refusing to rename core branch"));
+
+    // 5. Try to rename a valid feature branch to 'main' — should fail
+    git(path, &["checkout", "dev"]);
+    run_gitflow_success(path, &["feature", "start", "feat-rename-test"]);
+    let err_out = run_gitflow_failure(
+        path,
+        &["feature", "rename", "feat-rename-test", "refs/heads/main"],
+    );
+    assert!(err_out.contains("refusing to rename branch to core branch name"));
+}
+
+// ============================================================
+// T19: YQM Customer Feature Routing (Prevents merging to other customers)
+// ============================================================
+#[test]
+fn test_yqm_customer_feature_routing() {
+    let td = setup_test_repo();
+    let path = td.path();
+
+    // Ensure we are on main branch before creating YQM config
+    git(path, &["checkout", "main"]);
+
+    // Create a YQM config
+    let config = r#"
+[branches]
+main = "main"
+customer = { prefix = "customer/" }
+generalize = { prefix = "generalize/" }
+
+[merge]
+default_strategy = "squash"
+customer_sync_strategy = "merge"
+"#;
+    fs::write(path.join(".gitflow.toml"), config).unwrap();
+    git(path, &["add", ".gitflow.toml"]);
+    git(path, &["commit", "-m", "yqm config"]);
+
+    // Create customer branches
+    git(path, &["checkout", "main"]);
+    run_gitflow_success(path, &["custom", "start", "huawei"]);
+    git(path, &["checkout", "main"]);
+    run_gitflow_success(path, &["custom", "start", "ali"]);
+
+    // Checkout customer/huawei and start feature
+    git(path, &["checkout", "customer/huawei"]);
+    run_gitflow_success(
+        path,
+        &[
+            "feature",
+            "start",
+            "new-huawei-feat",
+            "--customer",
+            "huawei",
+        ],
+    );
+
+    let current = git_current_branch(path);
+    assert_eq!(current, "feature/customer-huawei/new-huawei-feat");
+
+    // Commit a change
+    fs::write(path.join("huawei.txt"), "huawei content").unwrap();
+    git(path, &["add", "huawei.txt"]);
+    git(path, &["commit", "-m", "add huawei.txt"]);
+
+    // Finish feature
+    run_gitflow_success(path, &["feature", "finish"]);
+
+    // Verify feature branch was deleted
+    let branches = git_branches(path);
+    assert!(!branches.contains("feature/customer-huawei/new-huawei-feat"));
+
+    // Verify it was squash-merged into customer/huawei
+    git(path, &["checkout", "customer/huawei"]);
+    let log_out = Command::new("git")
+        .args(["log", "-n", "1", "--oneline"])
+        .current_dir(path)
+        .output()
+        .unwrap();
+    let log = String::from_utf8_lossy(&log_out.stdout).to_string();
+    assert!(log.contains("Squash merge branch 'feature/customer-huawei/new-huawei-feat'"));
+
+    // Verify it was NOT merged into customer/ali
+    git(path, &["checkout", "customer/ali"]);
+    let log_ali_out = Command::new("git")
+        .args(["log", "--oneline"])
+        .current_dir(path)
+        .output()
+        .unwrap();
+    let log_ali = String::from_utf8_lossy(&log_ali_out.stdout).to_string();
+    assert!(!log_ali.contains("huawei.txt"));
+    assert!(!log_ali.contains("new-huawei-feat"));
+}

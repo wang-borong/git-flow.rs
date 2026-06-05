@@ -52,7 +52,7 @@ pub fn finish_task(
         }
     };
     let all_branch_types = config.branch_types.clone();
-    let base_branch = config.base_branch;
+    let base_branch = config.base_branch.clone();
 
     // -- fetch source branch if requested --
     if opts.fetch {
@@ -84,6 +84,32 @@ pub fn finish_task(
     };
     if branches.iter().all(|x| x.as_str() != branch_name) {
         Echo::error(format!("branch {} is not found", branch_name));
+        return;
+    }
+
+    // Protect core/base branches from finish operations
+    let is_core_branch = {
+        let normalized = branch_name
+            .strip_prefix("refs/heads/")
+            .unwrap_or(&branch_name);
+        let mut core_branches = vec![
+            base_branch.clone().unwrap_or_else(|| "main".to_string()),
+            "main".to_string(),
+            "master".to_string(),
+            "dev".to_string(),
+            "develop".to_string(),
+        ];
+        for bt in &all_branch_types {
+            core_branches.push(bt.from.clone());
+        }
+        core_branches.contains(&normalized.to_string())
+    };
+
+    if is_core_branch {
+        Echo::error(format!(
+            "safety rule: refusing to finish core branch '{}'",
+            branch_name
+        ));
         return;
     }
 
@@ -329,7 +355,7 @@ pub fn resolve_target_branches(
 }
 
 /// Infer the main branch name from the branch type configuration.
-fn infer_main_branch(branch_type: &BranchType, base_branch: Option<&str>) -> Option<String> {
+fn infer_main_branch(_branch_type: &BranchType, base_branch: Option<&str>) -> Option<String> {
     if let Some(base) = base_branch {
         return Some(base.to_string());
     }
@@ -349,10 +375,7 @@ fn infer_main_branch(branch_type: &BranchType, base_branch: Option<&str>) -> Opt
         "main".to_string()
     };
 
-    match branch_type.name.as_str() {
-        "feature" | "hotfix" | "release" | "generalize" | "general" => Some(auto_main),
-        _ => None, // Customer-specific types don't need safety checks
-    }
+    Some(auto_main)
 }
 
 fn format_commit_message(template: &str, source_branch: &str, target_branch: &str) -> String {

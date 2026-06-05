@@ -22,6 +22,42 @@ pub fn delete_branch(branch_name: String, branch_type: BranchType, remote: bool,
         return;
     }
 
+    // Protect core/base branches from deletion
+    let config = crate::config::read::read_config(None).ok();
+    let is_core_branch = {
+        let normalized = branch_name
+            .strip_prefix("refs/heads/")
+            .unwrap_or(&branch_name);
+        if let Some(ref cfg) = config {
+            let mut core_branches = vec![
+                cfg.base_branch
+                    .clone()
+                    .unwrap_or_else(|| "main".to_string()),
+                "main".to_string(),
+                "master".to_string(),
+                "dev".to_string(),
+                "develop".to_string(),
+            ];
+            for bt in &cfg.branch_types {
+                core_branches.push(bt.from.clone());
+            }
+            core_branches.contains(&normalized.to_string())
+        } else {
+            normalized == "main"
+                || normalized == "master"
+                || normalized == "dev"
+                || normalized == "develop"
+        }
+    };
+
+    if is_core_branch {
+        Echo::error(format!(
+            "safety rule: refusing to delete core branch '{}'",
+            branch_name
+        ));
+        return;
+    }
+
     // -- validate merge status if force is false --
     if !force {
         let mut is_merged = false;

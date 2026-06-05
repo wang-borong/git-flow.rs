@@ -44,8 +44,13 @@ fn resolve_start_branch(
         .find(|b| b.name == target_type_name)
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "Branch type '{}' not found in configuration",
-                target_type_name
+                "Branch type '{}' not found in configuration. Available: {:?}",
+                target_type_name,
+                config
+                    .branch_types
+                    .iter()
+                    .map(|x| &x.name)
+                    .collect::<Vec<_>>()
             )
         })?;
 
@@ -185,13 +190,7 @@ fn resolve_branch_info(
         let re = Regex::new(&format!("^{}$", pattern))?;
         if re.is_match(&full_branch_name) {
             let mut resolved_bt = bt.clone();
-            if let Some(ref cust) = customer_opt {
-                let customer_branch = format!("customer/{}", cust);
-                resolved_bt.from = customer_branch.clone();
-                for to_branch in &mut resolved_bt.to {
-                    to_branch.name = customer_branch.clone();
-                }
-            }
+            resolved_bt.resolve_customer(&full_branch_name, customer_opt.as_deref());
             return Ok((full_branch_name, resolved_bt));
         }
     }
@@ -215,13 +214,7 @@ fn resolve_branch_info(
         })?;
 
     let mut resolved_bt = bt.clone();
-    if let Some(ref cust) = customer_opt {
-        let customer_branch = format!("customer/{}", cust);
-        resolved_bt.from = customer_branch.clone();
-        for to_branch in &mut resolved_bt.to {
-            to_branch.name = customer_branch.clone();
-        }
-    }
+    resolved_bt.resolve_customer(&full_branch_name, customer_opt.as_deref());
 
     Ok((full_branch_name, resolved_bt))
 }

@@ -31,6 +31,55 @@ pub struct BranchType {
     pub after_rebase: Option<Command>,
 }
 
+impl BranchType {
+    pub fn resolve_customer(&mut self, branch_name: &str, customer_opt: Option<&str>) {
+        let mut pattern = self.create.clone();
+        pattern = pattern.replace("{{CUSTOMER}}", "(?P<customer>[^/]+)");
+        pattern = pattern.replace("{CUSTOMER}", "(?P<customer>[^/]+)");
+        pattern = pattern.replace("{{NAME}}", "(?P<name>[^/]+)");
+        pattern = pattern.replace("{NAME}", "(?P<name>[^/]+)");
+        pattern = pattern.replace("{{FEATURE}}", "(?P<feature>[^/]+)");
+        pattern = pattern.replace("{FEATURE}", "(?P<feature>[^/]+)");
+        pattern = pattern.replace("{{FIX}}", "(?P<fix>[^/]+)");
+        pattern = pattern.replace("{FIX}", "(?P<fix>[^/]+)");
+
+        let re = match regex::Regex::new(&format!("^{}$", pattern)) {
+            Ok(r) => r,
+            Err(_) => return,
+        };
+
+        let extracted_customer = if let Some(caps) = re.captures(branch_name) {
+            if caps.name("customer").is_some() {
+                caps.name("customer").map(|m| m.as_str().to_string())
+            } else if self.name.starts_with("customer-") && caps.name("name").is_some() {
+                caps.name("name").map(|m| m.as_str().to_string())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let cust_val = customer_opt.map(|s| s.to_string()).or(extracted_customer);
+        if let Some(ref cust) = cust_val {
+            let customer_branch = format!("customer/{}", cust);
+            self.from = customer_branch.clone();
+            for to_branch in &mut self.to {
+                if customer_opt.is_some() || self.name.starts_with("customer-") {
+                    to_branch.name = customer_branch.clone();
+                } else {
+                    to_branch.name = to_branch
+                        .name
+                        .replace("{{CUSTOMER}}", cust)
+                        .replace("{CUSTOMER}", cust)
+                        .replace("{{NAME}}", cust)
+                        .replace("{NAME}", cust);
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TargetBranch {
     pub name: String,

@@ -87,7 +87,11 @@ pub fn get_branch_type_name(
     });
     match target_branch_type {
         None => bail!("no matched branch type"),
-        Some(target_branch_type_v) => Ok((branch_name, target_branch_type_v.clone())),
+        Some(target_branch_type_v) => {
+            let mut resolved_bt = target_branch_type_v.clone();
+            resolved_bt.resolve_customer(&branch_name, None);
+            Ok((branch_name, resolved_bt))
+        }
     }
 }
 
