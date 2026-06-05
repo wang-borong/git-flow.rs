@@ -10,7 +10,7 @@ fn is_customer_branch(branch_name: &str, branch_types: &[BranchType]) -> bool {
         // A "customer" branch type is one where `create` starts with "customer/"
         // or `name` is "customer"
         (bt.name == "customer" || bt.create.starts_with("customer/")) && {
-            let prefix = bt.create.split("{NAME}").next().unwrap_or("customer/");
+            let prefix = bt.create.split('{').next().unwrap_or("customer/");
             branch_name.starts_with(prefix)
         }
     })
@@ -26,7 +26,7 @@ fn is_customer_scoped_branch(branch_name: &str, branch_types: &[BranchType]) -> 
         // AND their `create` pattern reflects a customer prefix
         bt.from.starts_with("customer/")
             || (bt.create.contains("customer-") && {
-                let prefix = bt.create.split("{NAME}").next().unwrap_or("");
+                let prefix = bt.create.split('{').next().unwrap_or("");
                 !prefix.is_empty() && branch_name.starts_with(prefix)
             })
     })
@@ -51,8 +51,8 @@ fn allowed_prefixes_for_main(branch_types: &[BranchType], main_branch: &str) -> 
                 && !bt.create.starts_with("customer/")
         })
         .map(|bt| {
-            // Extract the prefix from the `create` pattern (before {NAME})
-            bt.create.split("{NAME}").next().unwrap_or("").to_string()
+            // Extract the prefix from the `create` pattern (before the first placeholder brace)
+            bt.create.split('{').next().unwrap_or("").to_string()
         })
         .filter(|p| !p.is_empty())
         .collect()
