@@ -58,7 +58,7 @@ fn git_current_branch(dir: &std::path::Path) -> String {
 
 fn git_branches(dir: &std::path::Path) -> String {
     let out = Command::new("git")
-        .args(["branch", "--format=%(refname:short)"])
+        .args(["for-each-ref", "--format=%(refname:short)", "refs/heads/"])
         .current_dir(dir)
         .output()
         .unwrap();
@@ -223,7 +223,12 @@ fn test_feature_unmerged_delete() {
     assert!(err_out.contains("is not fully merged"));
 
     // Verify branch still exists
-    assert!(git_branches(path).contains("feature/feat-unmerged"));
+    let branches = git_branches(path);
+    assert!(
+        branches.contains("feature/feat-unmerged"),
+        "Branch 'feature/feat-unmerged' not found. Branches are:\n{}",
+        branches
+    );
 
     // Now delete with force flag
     run_gitflow_success(path, &["feature", "delete", "feat-unmerged", "--force"]);
@@ -463,9 +468,11 @@ fn test_feature_finish_keep_flag() {
     run_gitflow_success(path, &["feature", "finish", "keep-me", "--keep"]);
 
     // Branch must still exist
+    let branches = git_branches(path);
     assert!(
-        git_branches(path).contains("feature/keep-me"),
-        "Expected feature/keep-me to still exist after --keep"
+        branches.contains("feature/keep-me"),
+        "Expected feature/keep-me to still exist after --keep. Branches are:\n{}",
+        branches
     );
 }
 
@@ -490,7 +497,8 @@ fn test_feature_rename() {
     );
     assert!(
         branches.contains("feature/new-name"),
-        "New branch not found"
+        "New branch not found. Branches are:\n{}",
+        branches
     );
 }
 
@@ -905,6 +913,7 @@ fn test_shorthand_rename() {
     );
     assert!(
         branches.contains("feature/rename-dst"),
-        "New branch should exist"
+        "New branch should exist. Branches are:\n{}",
+        branches
     );
 }
