@@ -229,6 +229,7 @@ fn resolve_branch_info(
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
+    crate::utils::set_dry_run(args.dry_run);
 
     match &args.command {
         // -- commands that don't require env_valid --

@@ -40,6 +40,16 @@ impl Git {
 // # combine
 impl Git {
     pub fn merge(&self, source_branch: &str, custom_msg: Option<&str>) -> Result<()> {
+        if crate::utils::is_dry_run() {
+            println!(
+                "[Dry Run] git merge {} --no-ff{}",
+                source_branch,
+                custom_msg
+                    .map(|m| format!(" -m \"{}\"", m))
+                    .unwrap_or_default()
+            );
+            return Ok(());
+        }
         let repo = self.repo.borrow();
         let source_ref = repo.find_branch(source_branch, git2::BranchType::Local)?;
         let source_oid = source_ref.get().target().unwrap();
@@ -78,6 +88,10 @@ impl Git {
     }
 
     pub fn rebase(&self, base_branch: &str) -> Result<()> {
+        if crate::utils::is_dry_run() {
+            println!("[Dry Run] git rebase {}", base_branch);
+            return Ok(());
+        }
         let repo = self.repo.borrow();
         let workdir = repo
             .workdir()
@@ -103,6 +117,10 @@ impl Git {
     }
 
     pub fn cherry_pick(&self, commits: Vec<String>) -> Result<()> {
+        if crate::utils::is_dry_run() {
+            println!("[Dry Run] git cherry-pick {}", commits.join(" "));
+            return Ok(());
+        }
         let repo = self.repo.borrow();
         let workdir = repo
             .workdir()
@@ -130,6 +148,16 @@ impl Git {
     /// Squash merge: merge the source tree into the target without preserving
     /// individual commits. Creates a single commit with all changes.
     pub fn squash_merge(&self, source_branch: &str, custom_msg: Option<&str>) -> Result<()> {
+        if crate::utils::is_dry_run() {
+            println!(
+                "[Dry Run] git merge {} --squash{}",
+                source_branch,
+                custom_msg
+                    .map(|m| format!(" -m \"{}\"", m))
+                    .unwrap_or_default()
+            );
+            return Ok(());
+        }
         let repo = self.repo.borrow();
         let source_ref = repo.find_branch(source_branch, git2::BranchType::Local)?;
         let source_oid = source_ref.get().target().unwrap();
@@ -183,6 +211,10 @@ impl Git {
 // # other
 impl Git {
     pub fn switch(&self, target_branch: &str) -> Result<()> {
+        if crate::utils::is_dry_run() {
+            println!("[Dry Run] git checkout {}", target_branch);
+            return Ok(());
+        }
         let repo = self.repo.borrow();
         let branch = repo.find_branch(target_branch, git2::BranchType::Local)?;
         let commit = branch.get().peel(git2::ObjectType::Commit)?;
@@ -321,6 +353,10 @@ impl Git {
 
     /// Continue a rebase after conflict resolution.
     pub fn rebase_continue(&self) -> Result<()> {
+        if crate::utils::is_dry_run() {
+            println!("[Dry Run] git rebase --continue");
+            return Ok(());
+        }
         let repo = self.repo.borrow();
         let workdir = repo
             .workdir()
@@ -338,6 +374,10 @@ impl Git {
 
     /// Abort a rebase in progress, returning to the pre-rebase state.
     pub fn rebase_abort(&self) -> Result<()> {
+        if crate::utils::is_dry_run() {
+            println!("[Dry Run] git rebase --abort");
+            return Ok(());
+        }
         let repo = self.repo.borrow();
         let workdir = repo
             .workdir()
@@ -355,6 +395,10 @@ impl Git {
 
     /// Continue a merge after conflict resolution.
     pub fn merge_continue(&self) -> Result<()> {
+        if crate::utils::is_dry_run() {
+            println!("[Dry Run] git merge --continue");
+            return Ok(());
+        }
         let repo = self.repo.borrow();
         let workdir = repo
             .workdir()
@@ -372,6 +416,10 @@ impl Git {
 
     /// Abort a merge in progress, returning to the pre-merge state.
     pub fn merge_abort(&self) -> Result<()> {
+        if crate::utils::is_dry_run() {
+            println!("[Dry Run] git merge --abort");
+            return Ok(());
+        }
         let repo = self.repo.borrow();
         let workdir = repo
             .workdir()
@@ -389,6 +437,10 @@ impl Git {
 
     /// Continue a cherry-pick after conflict resolution.
     pub fn cherrypick_continue(&self) -> Result<()> {
+        if crate::utils::is_dry_run() {
+            println!("[Dry Run] git cherry-pick --continue");
+            return Ok(());
+        }
         let repo = self.repo.borrow();
         let workdir = repo
             .workdir()
@@ -406,6 +458,10 @@ impl Git {
 
     /// Abort a cherry-pick in progress, returning to the pre-cherry-pick state.
     pub fn cherrypick_abort(&self) -> Result<()> {
+        if crate::utils::is_dry_run() {
+            println!("[Dry Run] git cherry-pick --abort");
+            return Ok(());
+        }
         let repo = self.repo.borrow();
         let workdir = repo
             .workdir()

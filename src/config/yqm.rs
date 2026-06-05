@@ -265,11 +265,14 @@ pub fn parse_yqm_config(toml_content: &str) -> Result<Config> {
             });
             // Customer release uses the same branch type with --customer flag
             // at runtime (e.g. `git flow start v1.0-hw.1 release --customer huawei`)
-            // which overrides from/to dynamically. No separate branch type needed.
         }
     }
 
-    Ok(Config { branch_types })
+    Ok(Config {
+        branch_types,
+        allow_non_main_base: false,
+        base_branch: None,
+    })
 }
 
 fn parse_strategy(s: &str) -> Result<Strategy> {

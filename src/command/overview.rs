@@ -83,9 +83,9 @@ pub fn show_overview(config_path: Option<PathBuf>) {
         base_branches.insert(bt.from.clone());
     }
 
-    println!("\n========================================================");
-    println!("                 GITFLOW WORKSPACE OVERVIEW             ");
-    println!("========================================================");
+    println!("\n\x1b[1;36m┌────────────────────────────────────────────────────────┐\x1b[0m");
+    println!("\x1b[1;36m│               GITFLOW WORKSPACE OVERVIEW               │\x1b[0m");
+    println!("\x1b[1;36m└────────────────────────────────────────────────────────┘\x1b[0m");
 
     // Group branches by branch type name
     let mut grouped_branches: std::collections::HashMap<String, Vec<(String, String)>> =
@@ -134,10 +134,10 @@ pub fn show_overview(config_path: Option<PathBuf>) {
 
     // 2. Print Core/Base Branches
     if !core_branches.is_empty() {
-        println!("\n[ Core / Base Branches ]");
+        println!("\n\x1b[1;34m🌿 Core / Base Branches\x1b[0m");
+        println!("\x1b[90m────────────────────────────────────────────────────────\x1b[0m");
         for branch in &core_branches {
             let is_head = branch == &current_branch;
-            let marker = if is_head { "* " } else { "  " };
 
             // Core branches usually don't have parents configured directly,
             // but dev might track main. Let's try to parse if there's any relation.
@@ -153,24 +153,27 @@ pub fn show_overview(config_path: Option<PathBuf>) {
                     match git.get_ahead_behind(branch, parent) {
                         Ok((ahead, behind)) => {
                             if ahead == 0 && behind == 0 {
-                                "Sync: Up-to-date with main".to_string()
+                                format!("Up-to-date with {}", parent)
                             } else {
-                                format!("Sync: {} ahead, {} behind main", ahead, behind)
+                                format!("{} ahead, {} behind {}", ahead, behind, parent)
                             }
                         }
-                        Err(_) => "Sync: Unknown".to_string(),
+                        Err(_) => "Sync status unknown".to_string(),
                     }
                 } else {
-                    "Sync: Standalone".to_string()
+                    "Standalone".to_string()
                 }
             } else {
-                "Sync: Standalone".to_string()
+                "Standalone".to_string()
             };
 
             if is_head {
-                println!("\x1b[32m{} {} ({})\x1b[0m", marker, branch, sync_status);
+                println!(
+                    "  \x1b[1;32m🟢 * {:<25} \x1b[0m\x1b[90m[{}]\x1b[0m",
+                    branch, sync_status
+                );
             } else {
-                println!("{} {} ({})", marker, branch, sync_status);
+                println!("     {:<25} \x1b[90m[{}]\x1b[0m", branch, sync_status);
             }
         }
     }
@@ -179,19 +182,19 @@ pub fn show_overview(config_path: Option<PathBuf>) {
     for bt in &config.branch_types {
         let name = &bt.name;
         println!(
-            "\n[ {} Branches (Pattern: {}) ]",
+            "\n\x1b[1;35m🎯 {} Branches\x1b[0m \x1b[90m(Pattern: {})\x1b[0m",
             name.to_uppercase(),
             bt.create
         );
+        println!("\x1b[90m────────────────────────────────────────────────────────\x1b[0m");
 
         match grouped_branches.get(name) {
             None => {
-                println!("  (No active branches)");
+                println!("  \x1b[90m(No active branches)\x1b[0m");
             }
             Some(branches) => {
                 for (branch, parent) in branches {
                     let is_head = branch == &current_branch;
-                    let marker = if is_head { "* " } else { "  " };
 
                     let sync_str = if local_branches_set.contains(parent) {
                         match git.get_ahead_behind(branch, parent) {
@@ -213,9 +216,12 @@ pub fn show_overview(config_path: Option<PathBuf>) {
                     };
 
                     if is_head {
-                        println!("\x1b[32m{} {} -> {}\x1b[0m", marker, branch, sync_str);
+                        println!(
+                            "  \x1b[1;32m🟢 * {:<25} \x1b[0m\x1b[90m→ {}\x1b[0m",
+                            branch, sync_str
+                        );
                     } else {
-                        println!("{} {} -> {}", marker, branch, sync_str);
+                        println!("     {:<25} \x1b[90m→ {}\x1b[0m", branch, sync_str);
                     }
                 }
             }
@@ -224,25 +230,27 @@ pub fn show_overview(config_path: Option<PathBuf>) {
 
     // 4. Print other/untracked branches
     if !other_branches.is_empty() {
-        println!("\n[ Other / Untracked Branches ]");
+        println!("\n\x1b[1;36m👤 Other / Untracked Branches\x1b[0m");
+        println!("\x1b[90m────────────────────────────────────────────────────────\x1b[0m");
         for branch in &other_branches {
             let is_head = branch == &current_branch;
-            let marker = if is_head { "* " } else { "  " };
             if is_head {
-                println!("\x1b[32m{} {}\x1b[0m", marker, branch);
+                println!("  \x1b[1;32m🟢 * {}\x1b[0m", branch);
             } else {
-                println!("{} {}", marker, branch);
+                println!("     {}", branch);
             }
         }
     }
 
-    println!("\n========================================================");
+    println!("\n\x1b[90m────────────────────────────────────────────────────────\x1b[0m");
     if let Ok(changes) = git.has_uncommitted_changes() {
         if changes {
-            println!("\x1b[33mWarning: You have uncommitted changes in your workspace.\x1b[0m");
+            println!(
+                "  \x1b[1;33m⚠️  Warning: You have uncommitted changes in your workspace.\x1b[0m"
+            );
         } else {
-            println!("\x1b[32mWorkspace is clean.\x1b[0m");
+            println!("  \x1b[1;32m🟢 Workspace is clean.\x1b[0m");
         }
     }
-    println!("========================================================\n");
+    println!("\x1b[90m────────────────────────────────────────────────────────\x1b[0m\n");
 }

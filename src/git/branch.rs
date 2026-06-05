@@ -6,6 +6,10 @@ use super::{network_callbacks, Git};
 // # delete
 impl Git {
     pub fn del_local_branch(&self, target_branch: &str) -> Result<()> {
+        if crate::utils::is_dry_run() {
+            println!("[Dry Run] git branch -d {}", target_branch);
+            return Ok(());
+        }
         let repo = self.repo.borrow();
         let mut branch = repo.find_branch(target_branch, BranchType::Local)?;
         branch.delete()?;
@@ -13,6 +17,10 @@ impl Git {
     }
 
     pub fn del_remote_branch(&self, target_repo: &str, target_branch: &str) -> Result<()> {
+        if crate::utils::is_dry_run() {
+            println!("[Dry Run] git push {} :{}", target_repo, target_branch);
+            return Ok(());
+        }
         let repo = self.repo.borrow();
         let mut remote = repo.find_remote(target_repo)?;
         let refspec = format!(":refs/heads/{}", target_branch);
@@ -27,6 +35,10 @@ impl Git {
 // # create
 impl Git {
     pub fn create_local_branch(&self, source_branch: &str, target_branch: &str) -> Result<()> {
+        if crate::utils::is_dry_run() {
+            println!("[Dry Run] git branch {} {}", target_branch, source_branch);
+            return Ok(());
+        }
         let repo = self.repo.borrow();
         let source_ref = repo.find_branch(source_branch, BranchType::Local)?;
         let commit = source_ref.get().peel_to_commit()?;
@@ -41,6 +53,13 @@ impl Git {
         local_branch: &str,
         remote_branch: &str,
     ) -> Result<()> {
+        if crate::utils::is_dry_run() {
+            println!(
+                "[Dry Run] git push {} {}:{}",
+                repo_name, local_branch, remote_branch
+            );
+            return Ok(());
+        }
         let repo = self.repo.borrow();
         let mut remote = repo.find_remote(repo_name)?;
         let refspec = format!("refs/heads/{}:refs/heads/{}", local_branch, remote_branch);
@@ -58,6 +77,13 @@ impl Git {
         local_branch: &str,
         remote_branch: &str,
     ) -> Result<()> {
+        if crate::utils::is_dry_run() {
+            println!(
+                "[Dry Run] git push {} {}:{}",
+                remote_name, local_branch, remote_branch
+            );
+            return Ok(());
+        }
         let repo = self.repo.borrow();
         let mut remote = repo.find_remote(remote_name)?;
         let refspec = format!("refs/heads/{}:refs/heads/{}", local_branch, remote_branch);
@@ -72,6 +98,10 @@ impl Git {
 // # get
 impl Git {
     pub fn fetch_remote_data(&self) -> Result<()> {
+        if crate::utils::is_dry_run() {
+            println!("[Dry Run] git fetch --all");
+            return Ok(());
+        }
         let repo = self.repo.borrow();
         let remotes = repo.remotes()?;
         for entry in remotes.iter() {
@@ -87,6 +117,10 @@ impl Git {
 
     /// Fetch a specific remote.
     pub fn fetch_remote(&self, remote_name: &str) -> Result<()> {
+        if crate::utils::is_dry_run() {
+            println!("[Dry Run] git fetch {}", remote_name);
+            return Ok(());
+        }
         let repo = self.repo.borrow();
         let mut remote = repo.find_remote(remote_name)?;
         let mut fetch_opts = FetchOptions::new();
@@ -129,6 +163,10 @@ impl Git {
 impl Git {
     /// Create an annotated tag at the current HEAD.
     pub fn create_tag(&self, tag_name: &str, message: &str) -> Result<()> {
+        if crate::utils::is_dry_run() {
+            println!("[Dry Run] git tag -a {} -m \"{}\"", tag_name, message);
+            return Ok(());
+        }
         let repo = self.repo.borrow();
         let head = repo.head()?.peel_to_commit()?;
         let sig = repo.signature()?;
@@ -151,6 +189,10 @@ impl Git {
 
     /// Rename a local branch.
     pub fn rename_branch(&self, old_branch: &str, new_branch: &str) -> Result<()> {
+        if crate::utils::is_dry_run() {
+            println!("[Dry Run] git branch -m {} {}", old_branch, new_branch);
+            return Ok(());
+        }
         let repo = self.repo.borrow();
         let mut branch = repo.find_branch(old_branch, BranchType::Local)?;
         branch.rename(new_branch, false)?;

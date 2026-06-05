@@ -8,7 +8,16 @@ use crate::echo::Echo;
 pub fn init_config() {
     match interactive_init() {
         Err(err) => Echo::error(err.to_string()),
-        Ok(path) => Echo::success(format!("config written to {}", path.display())),
+        Ok(path) => {
+            if crate::utils::is_dry_run() {
+                Echo::success(format!(
+                    "[Dry Run] config simulation completed for {}",
+                    path.display()
+                ));
+            } else {
+                Echo::success(format!("config written to {}", path.display()));
+            }
+        }
     }
 }
 
@@ -19,10 +28,9 @@ fn interactive_init() -> Result<PathBuf> {
     println!("Select a template:");
     println!("[1] Standard gitflow (feature/release/hotfix from dev)");
     println!("[2] GitHub flow (feature from main)");
-    println!("[3] yqm Cloud (customer branches, no release)");
-    println!("[4] yqm Embedded (customer branches, with release)");
-    println!("[5] Custom (build from scratch)");
-    print!("Choice (1-5): ");
+    println!("[3] yqm workflow (customer branches, with release)");
+    println!("[4] Custom (build from scratch)");
+    print!("Choice (1-4): ");
     io::stdout().flush()?;
 
     let mut input = String::new();
@@ -32,9 +40,8 @@ fn interactive_init() -> Result<PathBuf> {
     let toml_content = match choice {
         "1" => standard_template(),
         "2" => github_flow_template(),
-        "3" => yqm_cloud_template(),
-        "4" => yqm_embedded_template(),
-        "5" => custom_template()?,
+        "3" => yqm_workflow_template(),
+        "4" => custom_template()?,
         _ => bail!("invalid choice"),
     };
 
@@ -73,6 +80,15 @@ fn interactive_init() -> Result<PathBuf> {
     }
 
     // -- write config --
+    if crate::utils::is_dry_run() {
+        println!(
+            "\n[Dry Run] Would write the following config to {}:\n",
+            path.display()
+        );
+        println!("{}", toml_content);
+        return Ok(path);
+    }
+
     let mut file = std::fs::File::create(&path)?;
     file.write_all(toml_content.as_bytes())?;
 
@@ -122,32 +138,8 @@ remote = "origin"
     .to_string()
 }
 
-fn yqm_cloud_template() -> String {
-    r#"# yqm Cloud Platform Config
-# Customer branches with squash merge, no release flow
-
-[branches]
-main = "main"
-customer = { prefix = "customer/" }
-generalize = { prefix = "generalize/" }
-
-[commands]
-disable = ["release"]
-
-[merge]
-default_strategy = "squash"
-customer_sync_strategy = "merge"
-
-[hooks]
-# post_start = "git push origin {BRANCH}:{BRANCH}"
-# post_finish = "ci/deploy-cloud-general.sh"
-# post_customer_sync = "ci/deploy-cloud-customer.sh {CUSTOMER}"
-"#
-    .to_string()
-}
-
-fn yqm_embedded_template() -> String {
-    r#"# yqm Embedded Product Config
+fn yqm_workflow_template() -> String {
+    r#"# yqm Workflow Config
 # Customer branches with squash merge, release flow for version control
 
 [branches]
@@ -166,9 +158,9 @@ customer_sync_strategy = "merge"
 
 [hooks]
 # post_start = "git push origin {BRANCH}:{BRANCH}"
-# post_finish = "ci/build-embedded-general.sh"
+# post_finish = "ci/build-general.sh"
 # post_tag = "ci/archive-firmware.sh {TAG}"
-# post_customer_sync = "ci/build-embedded-customer.sh {CUSTOMER}"
+# post_customer_sync = "ci/build-customer.sh {CUSTOMER}"
 "#
     .to_string()
 }

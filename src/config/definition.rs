@@ -3,6 +3,9 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub branch_types: Vec<BranchType>,
+    #[serde(default)]
+    pub allow_non_main_base: bool,
+    pub base_branch: Option<String>,
 }
 
 #[allow(dead_code)]

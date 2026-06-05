@@ -12,6 +12,18 @@ use crate::{
     git::Git,
 };
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
+pub static DRY_RUN: AtomicBool = AtomicBool::new(false);
+
+pub fn set_dry_run(val: bool) {
+    DRY_RUN.store(val, Ordering::SeqCst);
+}
+
+pub fn is_dry_run() -> bool {
+    DRY_RUN.load(Ordering::SeqCst)
+}
+
 pub fn env_valid() -> bool {
     if !Git::git_installed() {
         Echo::error("not in a git project (or git2 unavailable)");
@@ -95,9 +107,18 @@ pub fn run_hook(
     };
 
     let msg = format!("Run hook: {} {}", command.command, args.join(" "));
+    if is_dry_run() {
+        Echo::info(format!(
+            "[Dry Run] Would run hook: {} {}",
+            command.command,
+            args.join(" ")
+        ));
+        return Ok(());
+    }
     let finish = Echo::progress(&msg);
 
     // -- run --
+
     let result = process::Command::new(command.command).args(args).output();
 
     // -- print result --
