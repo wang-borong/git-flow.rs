@@ -395,6 +395,157 @@ fn test_hotfix_flow_success() {
 }
 
 // ============================================================
+// T1b: BUGFIX FLOW — merges to dev and feature/*
+// ============================================================
+#[test]
+fn test_bugfix_flow_success() {
+    let td = setup_test_repo();
+    let path = td.path();
+
+    // The default setup_test_repo doesn't have bugfix in config.
+    // Let's rewrite the config to include bugfix.
+    let config = r#"
+allow_non_main_base = true
+
+[[branch_types]]
+name = "feature"
+create = "feature/{NAME}"
+from = "dev"
+to = [{ name = "dev", strategy = "merge" }]
+
+[[branch_types]]
+name = "bugfix"
+create = "bugfix/{NAME}"
+from = "dev"
+to = [
+  { name = "dev", strategy = "merge" },
+  { name = "feature/*", strategy = "merge" }
+]
+"#;
+    fs::write(path.join(".gitflow.toml"), config).unwrap();
+    git(path, &["add", ".gitflow.toml"]);
+    git(path, &["commit", "-m", "add bugfix config"]);
+
+    // Create a feature branch so we can verify the bugfix propagates to feature/* branches too!
+    run_gitflow_success(path, &["feature", "start", "my-feature"]);
+    assert_eq!(git_current_branch(path), "feature/my-feature");
+
+    // Checkout dev
+    git(path, &["checkout", "dev"]);
+
+    // Start bugfix
+    run_gitflow_success(path, &["bugfix", "start", "my-bugfix"]);
+    assert_eq!(git_current_branch(path), "bugfix/my-bugfix");
+
+    // Commit a bugfix change
+    fs::write(path.join("bugfix.txt"), "fixed some bug").unwrap();
+    git(path, &["add", "bugfix.txt"]);
+    git(path, &["commit", "-m", "fix some bug"]);
+
+    // Finish bugfix
+    run_gitflow_success(path, &["bugfix", "finish", "my-bugfix"]);
+
+    // After finish, should be back on the last target, i.e., feature/my-feature
+    assert_eq!(git_current_branch(path), "feature/my-feature");
+
+    // bugfix branch should be deleted
+    assert!(!git_branches(path).contains("bugfix/my-bugfix"));
+
+    // bugfix.txt should exist on dev
+    assert!(
+        path.join("bugfix.txt").exists(),
+        "bugfix.txt missing from dev"
+    );
+
+    // bugfix.txt should exist on feature/my-feature too (due to feature/* target)
+    git(path, &["checkout", "feature/my-feature"]);
+    assert!(
+        path.join("bugfix.txt").exists(),
+        "bugfix.txt missing from feature/my-feature"
+    );
+}
+
+// ============================================================
+// T1c: REFACTOR FLOW — merges to main only, no customer support
+// ============================================================
+#[test]
+fn test_refactor_flow_success() {
+    let td = setup_test_repo();
+    let path = td.path();
+
+    // Must start refactor from main, so checkout main first
+    git(path, &["checkout", "main"]);
+
+    // Add refactor branch type to config originating from main to main
+    let config = r#"
+allow_non_main_base = true
+
+[[branch_types]]
+name = "refactor"
+create = "refactor/{NAME}"
+from = "main"
+to = [{ name = "main", strategy = "merge" }]
+"#;
+    fs::write(path.join(".gitflow.toml"), config).unwrap();
+    git(path, &["add", ".gitflow.toml"]);
+    git(path, &["commit", "-m", "add refactor config"]);
+
+    // Start refactor branch
+    run_gitflow_success(path, &["refactor", "start", "my-refactor"]);
+    assert_eq!(git_current_branch(path), "refactor/my-refactor");
+
+    // Commit some refactoring changes
+    fs::write(path.join("refactor.txt"), "refactoring code").unwrap();
+    git(path, &["add", "refactor.txt"]);
+    git(path, &["commit", "-m", "clean code"]);
+
+    // Finish refactor branch
+    run_gitflow_success(path, &["refactor", "finish", "my-refactor"]);
+
+    // Should merge back into main and checkout main
+    assert_eq!(git_current_branch(path), "main");
+
+    // refactor branch should be deleted
+    assert!(!git_branches(path).contains("refactor/my-refactor"));
+
+    // refactor.txt should exist on main
+    assert!(
+        path.join("refactor.txt").exists(),
+        "refactor.txt missing from main"
+    );
+}
+
+#[test]
+fn test_refactor_customer_unsupported() {
+    let td = setup_test_repo();
+    let path = td.path();
+
+    // Verify passing --customer to refactor start fails with CLI parsing error
+    let err_out = run_gitflow_failure(
+        path,
+        &["refactor", "start", "my-refactor", "--customer", "ali"],
+    );
+    assert!(
+        err_out.contains("unexpected argument '--customer'")
+            || err_out.contains("unexpected argument"),
+        "Expected CLI parse error for unexpected customer option, got: {}",
+        err_out
+    );
+
+    // Verify passing --customer to refactor finish fails with CLI parsing error
+    let err_out = run_gitflow_failure(
+        path,
+        &["refactor", "finish", "my-refactor", "--customer", "ali"],
+    );
+    assert!(
+        err_out.contains("unexpected argument '--customer'")
+            || err_out.contains("unexpected argument"),
+        "Expected CLI parse error for unexpected customer option, got: {}",
+        err_out
+    );
+}
+
+// ============================================================
 // T2: RELEASE FLOW — must use merge strategy (not squash)
 // ============================================================
 #[test]

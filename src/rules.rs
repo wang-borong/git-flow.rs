@@ -49,6 +49,8 @@ fn allowed_prefixes_for_main(branch_types: &[BranchType], main_branch: &str) -> 
             (bt.from == main_branch
                 || bt.name == "release"
                 || bt.name == "hotfix"
+                || bt.name == "bugfix"
+                || bt.name == "refactor"
                 || bt.name == "general"
                 || bt.name == "generalize")
                 && bt.name != "customer"
@@ -140,6 +142,7 @@ pub fn validate_merge_allowed(
         let allowed_prefixes = [
             format!("feature/customer-{}/", target_customer),
             format!("hotfix/customer-{}/", target_customer),
+            format!("bugfix/customer-{}/", target_customer),
             format!("general/customer-{}/", target_customer),
             format!("generalize/customer-{}/", target_customer),
         ];

@@ -154,6 +154,85 @@ pub fn parse_yqm_config(toml_content: &str) -> Result<Config> {
         after_rebase: None,
     });
 
+    // -- bugfix (from main, squash→main) --
+    if !is_disabled("bugfix") {
+        branch_types.push(BranchType {
+            name: "bugfix".to_string(),
+            create: "bugfix/{{NAME}}".to_string(),
+            from: main.clone(),
+            to: vec![TargetBranch {
+                name: main.clone(),
+                strategy: default_strategy.clone(),
+                push: None,
+                tag: None,
+            }],
+            remote: None,
+            tag_pattern: None,
+            before_start: None,
+            after_start: hook_cmd(&yqm.hooks.post_start),
+            before_finish: None,
+            after_finish: hook_cmd(&yqm.hooks.post_finish),
+            before_drop: None,
+            after_drop: None,
+            before_publish: None,
+            after_publish: None,
+            before_rebase: None,
+            after_rebase: None,
+        });
+    }
+
+    // -- customer bugfix (from customer/x, squash→customer/x) --
+    branch_types.push(BranchType {
+        name: "customer-bugfix".to_string(),
+        create: "bugfix/customer-{{NAME}}/{{FIX}}".to_string(),
+        from: format!("{}{{NAME}}", customer_prefix),
+        to: vec![TargetBranch {
+            name: format!("{}.*", customer_prefix),
+            strategy: default_strategy.clone(),
+            push: None,
+            tag: None,
+        }],
+        remote: None,
+        tag_pattern: None,
+        before_start: None,
+        after_start: hook_cmd(&yqm.hooks.post_start),
+        before_finish: None,
+        after_finish: hook_cmd(&yqm.hooks.post_finish),
+        before_drop: None,
+        after_drop: None,
+        before_publish: None,
+        after_publish: None,
+        before_rebase: None,
+        after_rebase: None,
+    });
+
+    // -- refactor (from main, squash→main) --
+    if !is_disabled("refactor") {
+        branch_types.push(BranchType {
+            name: "refactor".to_string(),
+            create: "refactor/{{NAME}}".to_string(),
+            from: main.clone(),
+            to: vec![TargetBranch {
+                name: main.clone(),
+                strategy: default_strategy.clone(),
+                push: None,
+                tag: None,
+            }],
+            remote: None,
+            tag_pattern: None,
+            before_start: None,
+            after_start: hook_cmd(&yqm.hooks.post_start),
+            before_finish: None,
+            after_finish: hook_cmd(&yqm.hooks.post_finish),
+            before_drop: None,
+            after_drop: None,
+            before_publish: None,
+            after_publish: None,
+            before_rebase: None,
+            after_rebase: None,
+        });
+    }
+
     // -- hotfix (from main, squash→main) --
     if !is_disabled("hotfix") {
         branch_types.push(BranchType {
@@ -339,11 +418,21 @@ customer_sync_strategy = "merge"
             .branch_types
             .iter()
             .any(|b| b.name == "customer-feature"));
+        assert!(config.branch_types.iter().any(|b| b.name == "bugfix"));
+        assert!(config
+            .branch_types
+            .iter()
+            .any(|b| b.name == "customer-bugfix"));
         assert!(config.branch_types.iter().any(|b| b.name == "hotfix"));
         assert!(config
             .branch_types
             .iter()
             .any(|b| b.name == "customer-hotfix"));
+        assert!(config.branch_types.iter().any(|b| b.name == "refactor"));
+        assert!(!config
+            .branch_types
+            .iter()
+            .any(|b| b.name == "customer-refactor"));
         assert!(config.branch_types.iter().any(|b| b.name == "general"));
         assert!(!config.branch_types.iter().any(|b| b.name == "release"));
         assert!(!config

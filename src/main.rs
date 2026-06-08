@@ -2,7 +2,10 @@ use std::path::PathBuf;
 
 use clap::CommandFactory;
 use clap::Parser;
-use cli::{Args, Command, CustomAction, FeatureAction, GeneralAction, HotfixAction, ReleaseAction};
+use cli::{
+    Args, BugfixAction, Command, CustomAction, FeatureAction, GeneralAction, HotfixAction,
+    RefactorAction, ReleaseAction,
+};
 use config::definition::BranchType;
 use config::read::read_config;
 use echo::Echo;
@@ -29,7 +32,12 @@ fn resolve_start_branch(
 
     let target_type_name = match customer {
         Some(_) => {
-            if type_name == "feature" || type_name == "hotfix" || type_name == "release" {
+            if type_name == "feature"
+                || type_name == "hotfix"
+                || type_name == "release"
+                || type_name == "bugfix"
+                || type_name == "refactor"
+            {
                 format!("customer-{}", type_name)
             } else {
                 type_name.to_string()
@@ -156,7 +164,11 @@ fn resolve_branch_info(
             } else {
                 let target_type_name = match &customer_opt {
                     Some(_) => {
-                        if type_name == "feature" || type_name == "hotfix" || type_name == "release"
+                        if type_name == "feature"
+                            || type_name == "hotfix"
+                            || type_name == "release"
+                            || type_name == "bugfix"
+                            || type_name == "refactor"
                         {
                             format!("customer-{}", type_name)
                         } else {
@@ -259,7 +271,12 @@ fn resolve_branch_info(
 
     let target_type_name = match &customer_val {
         Some(_) => {
-            if type_name == "feature" || type_name == "hotfix" || type_name == "release" {
+            if type_name == "feature"
+                || type_name == "hotfix"
+                || type_name == "release"
+                || type_name == "bugfix"
+                || type_name == "refactor"
+            {
                 format!("customer-{}", type_name)
             } else {
                 type_name.to_string()
@@ -888,6 +905,361 @@ async fn main() {
                 }
                 HotfixAction::Publish { name } => {
                     match resolve_branch_info("hotfix", name.clone(), None, args.config.clone()) {
+                        Err(err) => Echo::error(err.to_string()),
+                        Ok((branch_name, branch_type)) => {
+                            command::publish::publish_branch(branch_name, branch_type);
+                        }
+                    }
+                }
+            }
+        }
+
+        // -- Bugfix branches --
+        Command::Bugfix { action } => {
+            if !env_valid() {
+                return;
+            }
+            match action {
+                BugfixAction::Start {
+                    name,
+                    base,
+                    fetch,
+                    customer,
+                } => {
+                    let customer_to_use = get_customer_or_detect(customer, args.config.clone());
+                    match resolve_start_branch(
+                        "bugfix",
+                        name,
+                        customer_to_use.as_deref(),
+                        None,
+                        args.config.clone(),
+                    ) {
+                        Err(err) => Echo::error(err.to_string()),
+                        Ok((branch_name, branch_type)) => {
+                            let mut bt = branch_type;
+                            if let Some(ref b) = base {
+                                bt.from = b.clone();
+                            }
+                            command::start::start_task(
+                                branch_name,
+                                bt,
+                                *fetch,
+                                None,
+                                customer_to_use,
+                            );
+                        }
+                    }
+                }
+                BugfixAction::Finish {
+                    name,
+                    customer,
+                    keep,
+                    tag,
+                    squash,
+                    push,
+                    fetch,
+                    bump,
+                    sign,
+                    r#continue,
+                    rebase: _,
+                    squash_message,
+                    merge_message,
+                    no_verify,
+                } => {
+                    if *r#continue {
+                        command::continue_cmd::continue_operation();
+                        return;
+                    }
+                    match resolve_branch_info(
+                        "bugfix",
+                        name.clone(),
+                        customer.clone(),
+                        args.config.clone(),
+                    ) {
+                        Err(err) => Echo::error(err.to_string()),
+                        Ok((branch_name, branch_type)) => {
+                            let opts = command::finish::FinishOptions {
+                                keep: *keep,
+                                tag: tag.clone(),
+                                squash: *squash,
+                                push: *push,
+                                fetch: *fetch,
+                                bump: bump.clone(),
+                                squash_message: squash_message.clone(),
+                                merge_message: merge_message.clone(),
+                                update_message: None,
+                                no_verify: *no_verify,
+                                sign: *sign,
+                                customer: customer.clone(),
+                                cleanup_customer: false,
+                            };
+                            command::finish::finish_task(
+                                branch_name,
+                                branch_type,
+                                opts,
+                                args.config.clone(),
+                            );
+                        }
+                    }
+                }
+                BugfixAction::Update { name, rebase } => {
+                    match resolve_branch_info("bugfix", name.clone(), None, args.config.clone()) {
+                        Err(err) => Echo::error(err.to_string()),
+                        Ok((branch_name, branch_type)) => {
+                            command::update::update_branch(branch_name, branch_type, *rebase);
+                        }
+                    }
+                }
+                BugfixAction::Delete {
+                    name,
+                    remote,
+                    force,
+                } => match resolve_branch_info("bugfix", name.clone(), None, args.config.clone()) {
+                    Err(err) => Echo::error(err.to_string()),
+                    Ok((branch_name, branch_type)) => {
+                        command::delete::delete_branch(branch_name, branch_type, *remote, *force);
+                    }
+                },
+                BugfixAction::Rename { old_name, new_name } => {
+                    match resolve_branch_info(
+                        "bugfix",
+                        Some(old_name.clone()),
+                        None,
+                        args.config.clone(),
+                    ) {
+                        Err(err) => Echo::error(err.to_string()),
+                        Ok((branch_name, branch_type)) => {
+                            let new_resolved = match new_name {
+                                Some(new) => new.clone(),
+                                None => {
+                                    let git = match Git::open() {
+                                        Ok(g) => g,
+                                        Err(err) => {
+                                            Echo::error(err.to_string());
+                                            return;
+                                        }
+                                    };
+                                    let current = match git.current_branch() {
+                                        Ok(c) => c,
+                                        Err(err) => {
+                                            Echo::error(err.to_string());
+                                            return;
+                                        }
+                                    };
+                                    if !current.starts_with("bugfix/") {
+                                        Echo::error("Current branch is not a bugfix branch");
+                                        return;
+                                    }
+                                    let short_current =
+                                        current.strip_prefix("bugfix/").unwrap_or(&current);
+                                    let new_full = current.replace(short_current, old_name);
+                                    command::rename::rename_branch(current, new_full, branch_type);
+                                    return;
+                                }
+                            };
+                            let (new_full_name, _) = match resolve_branch_info(
+                                "bugfix",
+                                Some(new_resolved),
+                                None,
+                                args.config.clone(),
+                            ) {
+                                Ok(res) => res,
+                                Err(err) => {
+                                    Echo::error(err.to_string());
+                                    return;
+                                }
+                            };
+                            command::rename::rename_branch(branch_name, new_full_name, branch_type);
+                        }
+                    }
+                }
+                BugfixAction::Checkout { name } => {
+                    command::checkout::checkout_branch("bugfix", name, args.config.clone());
+                }
+                BugfixAction::Track { name } => {
+                    match resolve_branch_info(
+                        "bugfix",
+                        Some(name.clone()),
+                        None,
+                        args.config.clone(),
+                    ) {
+                        Err(err) => Echo::error(err.to_string()),
+                        Ok((branch_name, branch_type)) => {
+                            command::track::track_task(branch_name, branch_type);
+                        }
+                    }
+                }
+                BugfixAction::List { pattern } => {
+                    command::list::list_branches("bugfix", pattern.clone(), args.config.clone());
+                }
+                BugfixAction::Publish { name } => {
+                    match resolve_branch_info("bugfix", name.clone(), None, args.config.clone()) {
+                        Err(err) => Echo::error(err.to_string()),
+                        Ok((branch_name, branch_type)) => {
+                            command::publish::publish_branch(branch_name, branch_type);
+                        }
+                    }
+                }
+            }
+        }
+
+        // -- Refactor branches --
+        Command::Refactor { action } => {
+            if !env_valid() {
+                return;
+            }
+            match action {
+                RefactorAction::Start { name, base, fetch } => {
+                    match resolve_start_branch("refactor", name, None, None, args.config.clone()) {
+                        Err(err) => Echo::error(err.to_string()),
+                        Ok((branch_name, branch_type)) => {
+                            let mut bt = branch_type;
+                            if let Some(ref b) = base {
+                                bt.from = b.clone();
+                            }
+                            command::start::start_task(branch_name, bt, *fetch, None, None);
+                        }
+                    }
+                }
+                RefactorAction::Finish {
+                    name,
+                    keep,
+                    tag,
+                    squash,
+                    push,
+                    fetch,
+                    bump,
+                    sign,
+                    r#continue,
+                    rebase: _,
+                    squash_message,
+                    merge_message,
+                    no_verify,
+                } => {
+                    if *r#continue {
+                        command::continue_cmd::continue_operation();
+                        return;
+                    }
+                    match resolve_branch_info("refactor", name.clone(), None, args.config.clone()) {
+                        Err(err) => Echo::error(err.to_string()),
+                        Ok((branch_name, branch_type)) => {
+                            let opts = command::finish::FinishOptions {
+                                keep: *keep,
+                                tag: tag.clone(),
+                                squash: *squash,
+                                push: *push,
+                                fetch: *fetch,
+                                bump: bump.clone(),
+                                squash_message: squash_message.clone(),
+                                merge_message: merge_message.clone(),
+                                update_message: None,
+                                no_verify: *no_verify,
+                                sign: *sign,
+                                customer: None,
+                                cleanup_customer: false,
+                            };
+                            command::finish::finish_task(
+                                branch_name,
+                                branch_type,
+                                opts,
+                                args.config.clone(),
+                            );
+                        }
+                    }
+                }
+                RefactorAction::Update { name, rebase } => {
+                    match resolve_branch_info("refactor", name.clone(), None, args.config.clone()) {
+                        Err(err) => Echo::error(err.to_string()),
+                        Ok((branch_name, branch_type)) => {
+                            command::update::update_branch(branch_name, branch_type, *rebase);
+                        }
+                    }
+                }
+                RefactorAction::Delete {
+                    name,
+                    remote,
+                    force,
+                } => match resolve_branch_info("refactor", name.clone(), None, args.config.clone())
+                {
+                    Err(err) => Echo::error(err.to_string()),
+                    Ok((branch_name, branch_type)) => {
+                        command::delete::delete_branch(branch_name, branch_type, *remote, *force);
+                    }
+                },
+                RefactorAction::Rename { old_name, new_name } => {
+                    match resolve_branch_info(
+                        "refactor",
+                        Some(old_name.clone()),
+                        None,
+                        args.config.clone(),
+                    ) {
+                        Err(err) => Echo::error(err.to_string()),
+                        Ok((branch_name, branch_type)) => {
+                            let new_resolved = match new_name {
+                                Some(new) => new.clone(),
+                                None => {
+                                    let git = match Git::open() {
+                                        Ok(g) => g,
+                                        Err(err) => {
+                                            Echo::error(err.to_string());
+                                            return;
+                                        }
+                                    };
+                                    let current = match git.current_branch() {
+                                        Ok(c) => c,
+                                        Err(err) => {
+                                            Echo::error(err.to_string());
+                                            return;
+                                        }
+                                    };
+                                    if !current.starts_with("refactor/") {
+                                        Echo::error("Current branch is not a refactor branch");
+                                        return;
+                                    }
+                                    let short_current =
+                                        current.strip_prefix("refactor/").unwrap_or(&current);
+                                    let new_full = current.replace(short_current, old_name);
+                                    command::rename::rename_branch(current, new_full, branch_type);
+                                    return;
+                                }
+                            };
+                            let (new_full_name, _) = match resolve_branch_info(
+                                "refactor",
+                                Some(new_resolved),
+                                None,
+                                args.config.clone(),
+                            ) {
+                                Ok(res) => res,
+                                Err(err) => {
+                                    Echo::error(err.to_string());
+                                    return;
+                                }
+                            };
+                            command::rename::rename_branch(branch_name, new_full_name, branch_type);
+                        }
+                    }
+                }
+                RefactorAction::Checkout { name } => {
+                    command::checkout::checkout_branch("refactor", name, args.config.clone());
+                }
+                RefactorAction::Track { name } => {
+                    match resolve_branch_info(
+                        "refactor",
+                        Some(name.clone()),
+                        None,
+                        args.config.clone(),
+                    ) {
+                        Err(err) => Echo::error(err.to_string()),
+                        Ok((branch_name, branch_type)) => {
+                            command::track::track_task(branch_name, branch_type);
+                        }
+                    }
+                }
+                RefactorAction::List { pattern } => {
+                    command::list::list_branches("refactor", pattern.clone(), args.config.clone());
+                }
+                RefactorAction::Publish { name } => {
+                    match resolve_branch_info("refactor", name.clone(), None, args.config.clone()) {
                         Err(err) => Echo::error(err.to_string()),
                         Ok((branch_name, branch_type)) => {
                             command::publish::publish_branch(branch_name, branch_type);

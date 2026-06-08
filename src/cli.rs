@@ -38,12 +38,22 @@ pub enum Command {
         #[command(subcommand)]
         action: HotfixAction,
     },
+    /// Manage bugfix branches
+    Bugfix {
+        #[command(subcommand)]
+        action: BugfixAction,
+    },
+    /// Manage refactor branches
+    Refactor {
+        #[command(subcommand)]
+        action: RefactorAction,
+    },
     /// Manage customer branches (long-lived)
     Custom {
         #[command(subcommand)]
         action: CustomAction,
     },
-    /// Manage generalize branches (定制转通用)
+    /// Manage generalize branches (Custom to General)
     General {
         #[command(subcommand)]
         action: GeneralAction,
@@ -360,6 +370,144 @@ pub enum HotfixAction {
 }
 
 #[derive(Debug, Subcommand)]
+pub enum BugfixAction {
+    /// Start a new bugfix
+    Start {
+        name: String,
+        base: Option<String>,
+        #[arg(long)]
+        fetch: bool,
+        #[arg(long)]
+        customer: Option<String>,
+    },
+    /// Finish a bugfix branch
+    Finish {
+        name: Option<String>,
+        #[arg(long)]
+        customer: Option<String>,
+        #[arg(long)]
+        keep: bool,
+        /// create a tag after finish (optional: specify custom tag name)
+        #[arg(long, num_args = 0..=1, default_missing_value = "")]
+        tag: Option<String>,
+        #[arg(long)]
+        squash: bool,
+        #[arg(long)]
+        push: bool,
+        #[arg(long)]
+        fetch: bool,
+        #[arg(long)]
+        bump: Option<String>,
+        #[arg(long)]
+        sign: bool,
+        #[arg(long)]
+        r#continue: bool,
+        #[arg(long)]
+        rebase: bool,
+        #[arg(long)]
+        squash_message: Option<String>,
+        #[arg(long)]
+        merge_message: Option<String>,
+        #[arg(long)]
+        no_verify: bool,
+    },
+    /// Update a bugfix branch
+    Update {
+        name: Option<String>,
+        #[arg(long)]
+        rebase: bool,
+    },
+    /// Delete a bugfix branch
+    Delete {
+        name: Option<String>,
+        #[arg(long)]
+        remote: bool,
+        #[arg(long)]
+        force: bool,
+    },
+    /// Rename a bugfix branch
+    Rename {
+        old_name: String,
+        new_name: Option<String>,
+    },
+    /// Checkout a bugfix branch
+    Checkout { name: String },
+    /// Track a bugfix branch
+    Track { name: String },
+    /// List bugfix branches
+    List { pattern: Option<String> },
+    /// Publish a bugfix branch
+    Publish { name: Option<String> },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum RefactorAction {
+    /// Start a new refactoring
+    Start {
+        name: String,
+        base: Option<String>,
+        #[arg(long)]
+        fetch: bool,
+    },
+    /// Finish a refactoring branch
+    Finish {
+        name: Option<String>,
+        #[arg(long)]
+        keep: bool,
+        /// create a tag after finish (optional: specify custom tag name)
+        #[arg(long, num_args = 0..=1, default_missing_value = "")]
+        tag: Option<String>,
+        #[arg(long)]
+        squash: bool,
+        #[arg(long)]
+        push: bool,
+        #[arg(long)]
+        fetch: bool,
+        #[arg(long)]
+        bump: Option<String>,
+        #[arg(long)]
+        sign: bool,
+        #[arg(long)]
+        r#continue: bool,
+        #[arg(long)]
+        rebase: bool,
+        #[arg(long)]
+        squash_message: Option<String>,
+        #[arg(long)]
+        merge_message: Option<String>,
+        #[arg(long)]
+        no_verify: bool,
+    },
+    /// Update a refactoring branch
+    Update {
+        name: Option<String>,
+        #[arg(long)]
+        rebase: bool,
+    },
+    /// Delete a refactoring branch
+    Delete {
+        name: Option<String>,
+        #[arg(long)]
+        remote: bool,
+        #[arg(long)]
+        force: bool,
+    },
+    /// Rename a refactoring branch
+    Rename {
+        old_name: String,
+        new_name: Option<String>,
+    },
+    /// Checkout a refactoring branch
+    Checkout { name: String },
+    /// Track a refactoring branch
+    Track { name: String },
+    /// List refactoring branches
+    List { pattern: Option<String> },
+    /// Publish a refactoring branch
+    Publish { name: Option<String> },
+}
+
+#[derive(Debug, Subcommand)]
 pub enum CustomAction {
     /// Start (create) a customer branch
     Start {
@@ -408,7 +556,7 @@ pub enum CustomAction {
 
 #[derive(Debug, Subcommand)]
 pub enum GeneralAction {
-    /// Start a new general (定制转通用) branch
+    /// Start a new general (Custom to General) branch
     Start {
         name: String,
         /// Source customer name
