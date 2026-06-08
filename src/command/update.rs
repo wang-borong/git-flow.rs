@@ -54,7 +54,7 @@ pub fn update_branch(branch_name: String, branch_type: BranchType, force_rebase:
         match git.rebase(&branch_type.from) {
             Err(err) => {
                 Echo::error(err.to_string());
-                Echo::info("resolve conflicts, then run `gitflow continue`");
+                Echo::info("resolve conflicts, then run `git flow continue`");
             }
             Ok(_) => {
                 Echo::success(format!("rebase {} onto {}", branch_name, branch_type.from));
@@ -65,7 +65,7 @@ pub fn update_branch(branch_name: String, branch_type: BranchType, force_rebase:
         match git.merge(&branch_type.from, None) {
             Err(err) => {
                 Echo::error(err.to_string());
-                Echo::info("resolve conflicts, then run `gitflow continue`");
+                Echo::info("resolve conflicts, then run `git flow continue`");
             }
             Ok(_) => {
                 Echo::success(format!("merge {} into {}", branch_type.from, branch_name));

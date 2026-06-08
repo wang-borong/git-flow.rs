@@ -8,14 +8,14 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}=== Gitflow Multi-User Collaboration Simulation ===${NC}"
+echo -e "${BLUE}=== Git flow Multi-User Collaboration Simulation ===${NC}"
 
 # Find absolute path of the workspace
 WORKSPACE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-GITFLOW_BIN="$WORKSPACE_DIR/target/debug/gitflow"
+GITFLOW_BIN="$WORKSPACE_DIR/target/debug/git-flow"
 
 if [ ! -f "$GITFLOW_BIN" ]; then
-    echo -e "${YELLOW}Building gitflow binary...${NC}"
+    echo -e "${YELLOW}Building git-flow binary...${NC}"
     cargo build
 fi
 

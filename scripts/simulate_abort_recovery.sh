@@ -7,11 +7,11 @@ set -uo pipefail
 # Resolve GITFLOW to absolute path BEFORE cd to TMPDIR
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-GITFLOW="${GITFLOW:-$PROJECT_ROOT/target/debug/gitflow}"
+GITFLOW="${GITFLOW:-$PROJECT_ROOT/target/debug/git-flow}"
 
 # Ensure binary exists
 if [ ! -x "$GITFLOW" ]; then
-    echo "Building gitflow binary..."
+    echo "Building git-flow binary..."
     (cd "$PROJECT_ROOT" && cargo build -q 2>&1)
 fi
 
@@ -86,7 +86,7 @@ fi
 # Abort the merge
 git merge --abort 2>/dev/null || git rebase --abort 2>/dev/null || true
 
-# Run gitflow abort
+# Run git flow abort
 "$GITFLOW" abort
 CURRENT=$(check_branch .)
 

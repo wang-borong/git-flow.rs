@@ -175,7 +175,7 @@ pub fn continue_operation() {
                     {
                         // resolve_target_branches saved a new state (with the next remaining targets) if it failed.
                         // ISSUE-C2 fix: Inform user they need to continue again.
-                        Echo::info("Next target branch also has a conflict. Resolve it and run 'gitflow continue' again.");
+                        Echo::info("Next target branch also has a conflict. Resolve it and run 'git flow continue' again.");
                         return;
                     }
                 }

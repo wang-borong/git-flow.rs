@@ -1,6 +1,6 @@
 [package]
-name = "gitflow"
-version = "1.1.0"
+name = "git-flow"
+version = "1.2.0"
 edition = "2021"
 authors = ["Jason Wang <wleovm@gmail.com>"]
 keywords = ["git", "gitflow"]
@@ -11,7 +11,7 @@ categories = ["command-line-utilities"]
 description = "Extensible git flow written in rust for product developpment"
 
 [[bin]]
-name = "gitflow"
+name = "git-flow"
 path = "src/main.rs"
 
 [dependencies]

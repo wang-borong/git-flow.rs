@@ -7,13 +7,13 @@ set -uo pipefail
 # Resolve GITFLOW to absolute path BEFORE cd to TMPDIR
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-GITFLOW="${GITFLOW:-$PROJECT_ROOT/target/debug/gitflow}"
+GITFLOW="${GITFLOW:-$PROJECT_ROOT/target/debug/git-flow}"
 
 # Ensure binary exists
 if [ ! -x "$GITFLOW" ]; then
-    echo "Building gitflow binary..."
+    echo "Building git-flow binary..."
     (cd "$PROJECT_ROOT" && cargo build -q 2>&1)
-    GITFLOW="$PROJECT_ROOT/target/debug/gitflow"
+    GITFLOW="$PROJECT_ROOT/target/debug/git-flow"
 fi
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'

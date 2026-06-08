@@ -20,7 +20,7 @@ pub enum GitflowState {
         branch_name: String,
         branch_type: BranchType,
     },
-    /// Saved when `gitflow custom sync` hits a merge/rebase conflict mid-sync
+    /// Saved when `git flow custom sync` hits a merge/rebase conflict mid-sync
     Sync {
         /// The customer branch currently being synced (e.g. "customer/acme")
         customer_branch: String,

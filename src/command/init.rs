@@ -22,11 +22,11 @@ pub fn init_config() {
 }
 
 fn interactive_init() -> Result<PathBuf> {
-    println!("gitflow interactive configuration\n");
+    println!("git flow interactive configuration\n");
 
     // -- select base template --
     println!("Select a template:");
-    println!("[1] Standard gitflow (feature/release/hotfix from dev)");
+    println!("[1] Standard git flow (feature/release/hotfix from dev)");
     println!("[2] GitHub flow (feature from main)");
     println!("[3] yqm workflow (customer branches, with release)");
     println!("[4] Custom (build from scratch)");

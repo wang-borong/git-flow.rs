@@ -1,6 +1,6 @@
-# gitflow.rs
+# git-flow.rs
 
-Extensible gitflow written in Rust.
+Extensible git flow written in Rust.
 
 **Extensible:** Customize the workflow that suits your preferences.
 
@@ -10,28 +10,28 @@ Extensible gitflow written in Rust.
 
 ## Installation
 
-Download from [GitHub Releases](https://github.com/niuiic/gitflow.rs/releases).
+Download from [GitHub Releases](https://github.com/wang-borong/git-flow.rs/releases).
 
 ## Quick Start
 
 ```sh
 # Initialize config interactively
-gitflow init
+git flow init
 
 # Start a feature
-gitflow feature start my-feature
+git flow feature start my-feature
 
 # Finish the feature (squash merge to main, delete branch)
-gitflow feature finish my-feature
+git flow feature finish my-feature
 
 # Or use the shorthand for the current branch
-gitflow finish
+git flow finish
 ```
 
 ## Commands
 
 ```
-Usage: gitflow [OPTIONS] <COMMAND>
+Usage: git flow [OPTIONS] <COMMAND>
 
 Commands:
   feature   Manage feature branches
@@ -48,7 +48,7 @@ Commands:
   abort     abort current operation and restore previous state
   check     check config
   complete  generate shell completion
-  init      initialize gitflow config interactively
+  init      initialize git flow config interactively
   list      list available branch types
   overview  display a comprehensive overview of repository status
 ```
@@ -62,75 +62,78 @@ Commands:
   -V, --version        print version
 ```
 
+When invoked through Git, use `git flow -h` or `git flow help` for CLI help.
+`git flow --help` is handled by Git itself and tries to open the `git-flow` man page.
+
 ### Feature / Hotfix / Release / General Branches
 
-The standard syntax for these branches is `gitflow <type> <action>`.
+The standard syntax for these branches is `git flow <type> <action>`.
 
 ```sh
 # Start a branch
-gitflow feature start my-feature
+git flow feature start my-feature
 
 # Start from a customer branch
-gitflow hotfix start my-fix --customer aliyun
+git flow hotfix start my-fix --customer aliyun
 
 # Standard finish (merge to configured targets, delete branch)
-gitflow feature finish my-feature
+git flow feature finish my-feature
 
 # Keep branch after finish
-gitflow feature finish my-feature --keep
+git flow feature finish my-feature --keep
 
 # Create a tag after finish (often used with release)
-gitflow release finish v1.0.0 --tag
+git flow release finish v1.0.0 --tag
 
 # Squash merge (override configured strategy)
-gitflow feature finish my-feature --squash
+git flow feature finish my-feature --squash
 
 # Push target branches to remote
-gitflow feature finish my-feature --push
+git flow feature finish my-feature --push
 
 # Finish a general task and auto-revert picked commits on the customer branch
-gitflow general finish --cleanup-customer
+git flow general finish --cleanup-customer
 ```
 
 ### Customer Branches (Long-lived)
 
 ```sh
 # Create a customer branch from main
-gitflow custom start aliyun
+git flow custom start aliyun
 
 # Create and push to remote
-gitflow custom start aliyun --push
+git flow custom start aliyun --push
 
 # Sync main changes into a customer branch
-gitflow custom sync aliyun
+git flow custom sync aliyun
 
 # Sync using rebase instead of merge
-gitflow custom sync aliyun --rebase
+git flow custom sync aliyun --rebase
 
 # Sync all customer branches
-gitflow custom sync all
+git flow custom sync all
 
 # Sync all customer branches using rebase
-gitflow custom sync all --rebase
+git flow custom sync all --rebase
 
 # List all customer branches with their status
-gitflow custom list
+git flow custom list
 ```
 
 ### Shell Completion
 
 ```sh
 # Generate completion script
-gitflow complete bash >> ~/.bashrc
-gitflow complete zsh >> ~/.zshrc
-gitflow complete fish > ~/.config/fish/completions/gitflow.fish
+git flow complete bash >> ~/.bashrc
+git flow complete zsh > ~/.zfunc/_git-flow
+git flow complete fish > ~/.config/fish/completions/git-flow.fish
 ```
 
 ## Configuration
 
 Config file locations (in priority order):
 
-1. Explicit path: `gitflow -c /path/to/config.toml <command>`
+1. Explicit path: `git flow -c /path/to/config.toml <command>`
 2. Local: `<GitRoot>/.gitflow.toml`
 3. Global: `~/.config/gitflow/config.toml` (Linux/macOS) or `%APPDATA%/gitflow/config.toml` (Windows)
 

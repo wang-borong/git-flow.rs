@@ -125,7 +125,7 @@ pub fn sync_customer(
         match git.rebase(main_branch) {
             Err(err) => {
                 Echo::error(err.to_string());
-                // Save state so `gitflow continue` can resume after conflict resolution
+                // Save state so `git flow continue` can resume after conflict resolution
                 let state = crate::command::state::GitflowState::Sync {
                     customer_branch: customer_branch.clone(),
                     main_branch: main_branch.to_string(),
@@ -138,7 +138,7 @@ pub fn sync_customer(
                     Echo::error(format!("Failed to save gitflow state: {}", save_err));
                 } else {
                     Echo::info(
-                        "Gitflow state saved. Resolve the conflict and run 'gitflow continue'.",
+                        "Git flow state saved. Resolve the conflict and run 'git flow continue'.",
                     );
                 }
                 return;
@@ -152,7 +152,7 @@ pub fn sync_customer(
         match git.merge(main_branch, None) {
             Err(err) => {
                 Echo::error(err.to_string());
-                // Save state so `gitflow continue` can resume after conflict resolution
+                // Save state so `git flow continue` can resume after conflict resolution
                 let state = crate::command::state::GitflowState::Sync {
                     customer_branch: customer_branch.clone(),
                     main_branch: main_branch.to_string(),
@@ -165,7 +165,7 @@ pub fn sync_customer(
                     Echo::error(format!("Failed to save gitflow state: {}", save_err));
                 } else {
                     Echo::info(
-                        "Gitflow state saved. Resolve the conflict and run 'gitflow continue'.",
+                        "Git flow state saved. Resolve the conflict and run 'git flow continue'.",
                     );
                 }
                 return;
@@ -370,7 +370,7 @@ pub fn sync_all_customers(
     if fail_count > 0 {
         println!();
         Echo::info("Hint: To manually resolve failed branches, run:");
-        Echo::info("  gitflow custom sync <branch_name> [--rebase]");
+        Echo::info("  git flow custom sync <branch_name> [--rebase]");
     }
 
     // -- restore original branch --

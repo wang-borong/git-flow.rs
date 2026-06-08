@@ -346,7 +346,7 @@ pub fn resolve_target_branches(
                     Echo::error(format!("Failed to save gitflow state: {}", save_err));
                 } else {
                     Echo::info(
-                        "Gitflow state saved. Resolve the conflict and run 'gitflow continue'.",
+                        "Git flow state saved. Resolve the conflict and run 'git flow continue'.",
                     );
                 }
             }

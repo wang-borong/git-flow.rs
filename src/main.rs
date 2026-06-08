@@ -315,7 +315,7 @@ async fn main() {
         // -- commands that don't require env_valid --
         Command::Complete { shell } => {
             let mut cmd = Args::command();
-            clap_complete::generate(*shell, &mut cmd, "gitflow", &mut std::io::stdout());
+            clap_complete::generate(*shell, &mut cmd, "git-flow", &mut std::io::stdout());
         }
         Command::List => command::list::list_branch_types(args.config),
         Command::Overview => command::overview::show_overview(args.config),
@@ -473,7 +473,7 @@ async fn main() {
                                     }
                                     let old_full = current;
                                     // If we are renaming current branch, the user invoked it as:
-                                    // gitflow feature rename new-name
+                                    // git flow feature rename new-name
                                     // In this case, old_name contains the new name.
                                     let short_current =
                                         old_full.strip_prefix("feature/").unwrap_or(&old_full);

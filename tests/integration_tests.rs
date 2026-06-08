@@ -3,24 +3,24 @@ use std::process::Command;
 use tempfile::TempDir;
 
 fn run_gitflow(dir: &std::path::Path, args: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_gitflow"))
+    Command::new(env!("CARGO_BIN_EXE_git-flow"))
         .env("EDITOR", "true")
         .args(args)
         .current_dir(dir)
         .output()
-        .expect("failed to execute gitflow binary")
+        .expect("failed to execute git-flow binary")
 }
 
 fn run_gitflow_success(dir: &std::path::Path, args: &[&str]) -> String {
     let output = run_gitflow(dir, args);
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    println!("--- gitflow success args: {:?} ---", args);
+    println!("--- git flow success args: {:?} ---", args);
     println!("stdout:\n{}", stdout);
     println!("stderr:\n{}", stderr);
     assert!(
         output.status.success(),
-        "gitflow command failed with args {:?}.\nstdout: {}\nstderr: {}",
+        "git flow command failed with args {:?}.\nstdout: {}\nstderr: {}",
         args,
         stdout,
         stderr
@@ -32,10 +32,10 @@ fn run_gitflow_failure(dir: &std::path::Path, args: &[&str]) -> String {
     let output = run_gitflow(dir, args);
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    println!("--- gitflow failure args: {:?} ---", args);
+    println!("--- git flow failure args: {:?} ---", args);
     println!("stdout:\n{}", stdout);
     println!("stderr:\n{}", stderr);
-    // Note: conceptually it failed, but gitflow exits with 0 on normal error prints.
+    // Note: conceptually it failed, but git flow exits with 0 on normal error prints.
     // So we don't assert output.status.success() here, we just return the output.
     stdout + &stderr
 }
@@ -1017,7 +1017,7 @@ fn test_abort_restores_source_branch() {
     // Abort the in-progress merge
     git(path, &["merge", "--abort"]);
 
-    // Run gitflow abort
+    // Run git flow abort
     run_gitflow_success(path, &["abort"]);
 
     // GITFLOW_STATE should be cleared
@@ -1097,7 +1097,7 @@ to = [{ name = "main", strategy = "merge" }]
 }
 
 // ============================================================
-// T15: SHORTHAND — gitflow finish (infers branch type from current branch)
+// T15: SHORTHAND - git flow finish (infers branch type from current branch)
 // ============================================================
 #[test]
 fn test_shorthand_finish() {
@@ -1119,7 +1119,7 @@ fn test_shorthand_finish() {
 }
 
 // ============================================================
-// T16: SHORTHAND — gitflow delete (infers branch type)
+// T16: SHORTHAND - git flow delete (infers branch type)
 // ============================================================
 #[test]
 fn test_shorthand_delete() {
@@ -1137,7 +1137,7 @@ fn test_shorthand_delete() {
 }
 
 // ============================================================
-// T17: SHORTHAND — gitflow rename (infers branch type)
+// T17: SHORTHAND - git flow rename (infers branch type)
 // ============================================================
 #[test]
 fn test_shorthand_rename() {

@@ -2,7 +2,7 @@
 set -e
 
 # ==============================================================================
-# Gitflow Conflict Resolution Simulation Script
+# Git flow Conflict Resolution Simulation Script
 # ==============================================================================
 # This script simulates a scenario where two developers work concurrently and
 # encounter a merge conflict when finishing a feature branch.
@@ -11,7 +11,7 @@ set -e
 
 # Compile the latest binary first
 cargo build
-GITFLOW_BIN="$(pwd)/target/debug/gitflow"
+GITFLOW_BIN="$(pwd)/target/debug/git-flow"
 if [ ! -f "$GITFLOW_BIN" ]; then
     echo "[-] ERROR: "$GITFLOW_BIN" binary not found. Run cargo build."
     exit 1
